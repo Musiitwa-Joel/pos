@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TREDPOS INDUSTRIES</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;700;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Michroma&display=swap" rel="stylesheet">
+</head>
+
+<body>
+  <!-- Early Theme Detection (Prevents "White Flash") -->
+  <script>
+    (function () {
+      const savedTheme = localStorage.getItem('theme');
+      const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme || systemTheme);
+    })();
+  </script>
+
+  <!-- Industrial Splash Screen Styles -->
+  <style>
+    :root {
+      --splash-bg: #ffffff;
+      --splash-spinner: #f97316;
+    }
+
+    :root[data-theme='dark'] {
+      --splash-bg: #0c0d0e;
+    }
+
+    body {
+      margin: 0;
+      background-color: var(--splash-bg);
+    }
+
+    #vanguard-splash-screen {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--splash-bg);
+      z-index: 999999;
+      transition: opacity 400ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .splash-logo {
+      width: 140px;
+      margin-bottom: 32px;
+      filter: drop-shadow(0 0 20px rgba(249, 115, 22, 0.15));
+    }
+
+    #vanguard-spinner {
+      display: flex;
+      gap: 12px;
+    }
+
+    #vanguard-spinner div {
+      width: 10px;
+      height: 10px;
+      background-color: var(--splash-spinner);
+      border-radius: 50%;
+      animation: vanguard-bounce 1s infinite ease-in-out both;
+    }
+
+    #vanguard-spinner .bounce1 { animation-delay: -0.32s; }
+    #vanguard-spinner .bounce2 { animation-delay: -0.16s; }
+
+    @keyframes vanguard-bounce {
+      0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+      40% { transform: scale(1.2); opacity: 1; }
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme='light']) {
+        --splash-bg: #0c0d0e;
+      }
+    }
+  </style>
+
+  <div id="root">
+    <!-- Initial Splash State -->
+    <div id="vanguard-splash-screen">
+      <svg class="splash-logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50.96 58.34"><defs><style>.cls-1,.cls-2,.cls-3,.cls-4{fill:none;stroke-miterlimit:10;}.cls-1,.cls-3{stroke:#231f20;}.cls-1,.cls-2{stroke-width:4.37px;}.cls-2,.cls-4{stroke:#f36d26;}.cls-3,.cls-4{stroke-width:0.94px;}.cls-5{font-size:13.54px;fill:#f36d26;font-family:Phosphate-Inline, Phosphate;}.cls-6{fill:#231f20;}</style></defs><g id="Layer_2" data-name="Layer 2"><g id="Layer_1-2" data-name="Layer 1"><circle class="cls-1" cx="24.12" cy="21.81" r="19.62"/><circle class="cls-2" cx="24.24" cy="21.93" r="13.33"/><circle class="cls-1" cx="24.29" cy="22.31" r="7.13"/><circle class="cls-3" cx="40.77" cy="50.01" r="4.23"/><circle class="cls-4" cx="40.8" cy="50.04" r="2.88"/><circle class="cls-3" cx="40.81" cy="50.12" r="1.54"/><text class="cls-5" transform="translate(0 54.63)">TRED<tspan class="cls-6" x="29.04" y="0" xml:space="preserve">P   S</tspan></text></g></g></svg>
+      <div id="vanguard-spinner">
+        <div class="bounce1"></div>
+        <div class="bounce2"></div>
+        <div class="bounce3"></div>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="./src/main.tsx"></script>
+</body>
+
+</html>

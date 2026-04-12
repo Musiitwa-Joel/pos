@@ -1,0 +1,48 @@
+{
+  "name": "server",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "bun run server.js",
+    "dev": "bun --watch run server.js"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "dotenv": "^17.2.3"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "@apollo/server": "^4.12.2",
+    "@as-integrations/express5": "^1.0.0",
+    "@graphql-tools/load-files": "^7.0.1",
+    "@graphql-tools/merge": "^9.0.24",
+    "@graphql-tools/schema": "^10.0.23",
+    "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "google-auth-library": "^10.6.2",
+    "graphql": "^16.11.0",
+    "graphql-scalars": "^1.24.2",
+    "graphql-subscriptions": "^3.0.0",
+    "graphql-tools": "^9.0.18",
+    "graphql-upload": "^17.0.0",
+    "graphql-ws": "^6.0.6",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.2",
+    "mysql2": "^3.14.1",
+    "node-cron": "^4.2.1",
+    "nodemailer": "^7.0.9",
+    "pdfkit": "^0.17.2",
+    "puppeteer": "^24.28.0",
+    "qrcode": "^1.5.3",
+    "sharp": "^0.34.5",
+    "url": "^0.11.4",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.3",
+    "xlsx": "^0.18.5"
+  }
+}

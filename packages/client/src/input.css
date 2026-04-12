@@ -1,0 +1,362 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;700;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Michroma&display=swap");
+@import "tailwindcss";
+@source "../";
+
+@theme {
+  --color-brand-dark: var(--bg-main);
+  --color-brand-graphite: var(--bg-panel);
+  --color-brand-steel: var(--border-main);
+  --color-brand-accent: #f97316;
+
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-danger: #dc2626;
+
+  --font-display: "Michroma", "Bank Gothic", sans-serif;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* NEO-BRUTALIST TOKENS for WOW FACTOR */
+  --color-cream: #fefce8;
+  --color-neo-orange: #ff6b00;
+  --color-neo-blue: #0066ff;
+  --color-neo-green: #00ff66;
+  --font-neo-display: "Space Grotesk", sans-serif;
+  --font-neo-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --bg-main: #0f1115;
+  --bg-panel: #1a1d24;
+  --border-main: #2a2f3a;
+  --text-main: #cbd5e1;
+  --text-muted: #64748b;
+  --grid-color: rgba(42, 47, 58, 0.1);
+}
+
+.light {
+  --bg-main: #f8fafc;
+  --bg-panel: #ffffff;
+  --border-main: #e2e8f0;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --grid-color: rgba(226, 232, 240, 0.4);
+}
+
+@layer base {
+  body {
+    @apply bg-brand-dark text-[var(--text-main)] antialiased font-sans selection:bg-brand-accent/30;
+    background-image:
+      linear-gradient(var(--grid-color) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .font-display {
+    @apply font-display tracking-tight uppercase text-[var(--text-main)];
+  }
+}
+
+@layer components {
+  .industrial-panel {
+    @apply bg-brand-graphite border border-brand-steel rounded-none shadow-sm relative;
+  }
+
+  .industrial-panel-header {
+    @apply bg-brand-dark/5 border-b border-brand-steel px-4 py-2 flex items-center justify-between;
+  }
+
+  .terminal-input {
+    @apply bg-brand-dark/10 border border-brand-steel text-[var(--text-main)] px-4 py-2 font-mono outline-none focus:border-brand-accent transition-all rounded-none;
+  }
+
+  .btn-industrial {
+    @apply px-4 py-2 font-display text-[10px] tracking-widest uppercase transition-all active:scale-95 active:shadow-inner rounded-none border;
+  }
+
+  .btn-primary {
+    @apply bg-brand-accent border-brand-accent text-white hover:bg-orange-600 hover:shadow-[0_0_15px_rgba(249,115,22,0.3)];
+  }
+
+  .btn-outline {
+    @apply bg-transparent border-brand-steel text-[var(--text-muted)] hover:text-[var(--text-main)] hover:border-slate-500;
+  }
+
+  .keyboard-hint {
+    @apply text-[9px] font-mono bg-brand-steel/10 px-1.5 py-0.5 rounded-none text-[var(--text-muted)] border border-brand-steel/50;
+  }
+
+  .data-table {
+    @apply w-full border-collapse text-left text-xs;
+  }
+
+  .data-table th {
+    @apply bg-brand-dark/5 p-3 font-display text-[9px] text-[var(--text-muted)] border-b border-brand-steel sticky top-0;
+  }
+
+  .data-table td {
+    @apply p-3 border-b border-brand-steel/20 font-sans text-[var(--text-main)];
+  }
+
+  .data-table tr:hover {
+    @apply bg-brand-steel/5;
+  }
+
+  .status-indicator {
+    @apply w-1.5 h-1.5 rounded-none;
+  }
+
+  /* Refined HUD Alert V2 - Clean & Persistent */
+  .industrial-alert-v2 {
+    @apply relative px-5 py-4 bg-[var(--bg-panel)] border border-[var(--border-main)] border-l-4 border-l-brand-accent text-[var(--text-main)] mb-6 shadow-md overflow-hidden;
+  }
+
+  .industrial-alert-v2 .alert-label {
+    @apply inline-block font-display text-[9px] text-brand-accent bg-brand-accent/10 px-2 py-0.5 mb-2.5 border border-brand-accent/20 uppercase tracking-[0.2em] font-bold leading-none;
+  }
+
+  .industrial-alert-critical {
+    @apply border-l-danger bg-danger/10;
+  }
+
+  .industrial-alert-critical .alert-label {
+    @apply text-danger border-danger/20 bg-danger/15;
+  }
+}
+
+/* NEO-BRUTALIST UTILITIES */
+@utility neo-border {
+  border: 4px solid black !important;
+}
+
+@utility neo-shadow {
+  box-shadow: 8px 8px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+@utility neo-shadow-sm {
+  box-shadow: 4px 4px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+@utility neo-shadow-lg {
+  box-shadow: 12px 12px 0px 0px rgba(0, 0, 0, 1) !important;
+}
+
+@utility neo-button {
+  @apply neo-border neo-shadow-sm px-6 py-3 font-neo-display font-bold uppercase transition-all active:translate-x-[2px] active:translate-y-[2px] active:shadow-none;
+}
+
+@utility neo-card {
+  @apply neo-border neo-shadow bg-white p-6;
+}
+
+/* TRED-WEB THEME SCOPING - HARD RESET FOR SOLID CONTRAST */
+.tred-web {
+  --font-display: var(--font-neo-display);
+  --font-sans: var(--font-neo-sans);
+
+  font-family: var(--font-neo-sans);
+  background-color: #fefce8;
+  /* Default Cream */
+  color: #000000;
+}
+
+/* Hard reset for specific text elements that leak industrial gray */
+.tred-web h1,
+.tred-web h2,
+.tred-web h3,
+.tred-web h4,
+.tred-web .font-display {
+  font-family: var(--font-neo-display) !important;
+  text-transform: uppercase !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.05em !important;
+  color: #000000;
+}
+
+/* Targeted reset for standard text to ensure it stays black by default */
+.tred-web p,
+.tred-web li {
+  color: #000000;
+}
+
+/* Allow utility classes like text-white to override the default black */
+.tred-web .text-white {
+  color: #ffffff !important;
+}
+
+.tred-web .text-neo-orange {
+  color: #ff6b00 !important;
+}
+
+.tred-web .bg-cream {
+  background-color: #fefce8 !important;
+}
+
+/* Custom Scrollbar - Sharp & Industrial */
+
+/* Custom Scrollbar - Sharp & Industrial */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-brand-dark;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-brand-steel hover:bg-brand-accent transition-colors;
+}
+
+/* Animations */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 0.5;
+    filter: blur(8px);
+  }
+
+  50% {
+    opacity: 1;
+    filter: blur(12px);
+  }
+}
+
+.glow-accent {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.2);
+}
+
+/* Premium Theme Transition - Telegram Style Circular Reveal */
+::view-transition-image-pair(root) {
+  isolation: isolate;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+  display: block;
+}
+
+::view-transition-old(root) {
+  z-index: 1;
+}
+
+::view-transition-new(root) {
+  z-index: 999999;
+}
+
+/* Print Styling for 80mm Thermal Receipt */
+@media print {
+  @page {
+    margin: 0;
+    size: 80mm auto;
+  }
+
+  /* Hide everything except the printable area */
+  .no-print {
+    display: none !important;
+  }
+
+  body > :not(.printable-receipt) {
+    display: none !important;
+  }
+
+  #root {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+    background-image: none !important;
+    color: black !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 80mm !important;
+  }
+
+  .printable-receipt {
+    display: block !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 80mm !important;
+    padding: 4mm !important;
+    background: white !important;
+    color: black !important;
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace !important;
+  }
+
+  /* Ensure high contrast and no wasted ink */
+  * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    transition: none !important;
+  }
+}
+
+.printable-receipt {
+  display: none;
+}
+
+/* ===== Layout fixes: prevent horizontal overflow on small viewports ===== */
+/* Conservative, layout-only overrides. Do NOT change visual spacing or component structure. */
+
+html,
+body,
+#root {
+  /* Never allow the root to exceed the viewport width */
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Ensure consistent box-sizing (Tailwind already sets this, but keep explicit for safety) */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Prevent panels and cards from exceeding their parent's width */
+.industrial-panel {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Ensure common flex/grid containers can shrink and don't force horizontal overflow */
+.flex,
+.inline-flex,
+.grid,
+.block,
+.flex-1 {
+  min-width: 0;
+}
+
+/* Make images, SVGs and tables respect container width */
+img,
+svg,
+table,
+pre {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Tables are allowed to scroll when wrapped; ensure they don't force the page wider by default */
+.data-table {
+  min-width: 0 !important;
+}
+
+/* Keep utility-style masked/scroll helpers but ensure they don't expand viewport */
+.mask-linear-right {
+  -webkit-mask-image: linear-gradient(to right, black 85%, transparent);
+  mask-image: linear-gradient(to right, black 85%, transparent);
+  overflow: hidden;
+}
+
+/* End layout fixes */

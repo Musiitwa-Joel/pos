@@ -1,0 +1,159 @@
+/* 
+  Vanguard Industrial UI Components
+  ----------------------------------
+  Dedicated styling for mission-critical modals, popovers, and dropdowns. 
+  These styles are isolated from global utility changes to ensure 100% layout stability.
+*/
+
+:root {
+  --modal-z-index: 1000;
+  --popover-z-index: 50;
+  --dropdown-z-index: 40;
+  
+  /* Isolated Modal Tokens (Independent of index.css) */
+  --modal-backdrop-blur: 4px;
+  --modal-backdrop-bg: rgba(12, 13, 14, 0.85);
+  --modal-content-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  --modal-border: var(--border-main);
+}
+
+/* Modals: Centered, Fixed-Cap Containers */
+.industrial-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--modal-z-index);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+/* Dedicated Backdrop Layer */
+.industrial-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background-color: var(--modal-backdrop-bg);
+  backdrop-filter: blur(var(--modal-backdrop-blur));
+  -webkit-backdrop-filter: blur(var(--modal-backdrop-blur));
+}
+
+.industrial-modal-content {
+  width: 100%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--modal-border);
+  box-shadow: var(--modal-content-shadow);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  z-index: 10;
+  
+  /* Text Clarity Protections */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  backface-visibility: hidden;
+}
+
+/* Popovers: Bottom-to-Top Positioning Logic (used in PromotionManager) */
+.industrial-popover {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 0.5rem;
+  z-index: var(--popover-z-index);
+  width: 280px;
+  min-width: 280px;
+  max-height: 480px;
+  overflow-y: auto;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-main);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.industrial-popover-down {
+  bottom: auto;
+  top: 100%;
+  margin-bottom: 0;
+  margin-top: 0.5rem;
+}
+
+/* Dropdowns: Fixed-Width Collapsible Panels */
+.industrial-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  z-index: var(--dropdown-z-index);
+  min-width: 200px;
+  width: max-content;
+  max-width: 320px;
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: var(--bg-panel);
+  border: 1px solid var(--border-main);
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Mobile Drawers: Industrial Full-Screen Overlay (used in POS) */
+.industrial-mobile-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  background-color: var(--bg-main);
+  padding-top: 3.5rem; /* pt-14 replacement */
+  padding-bottom: env(safe-area-inset-bottom, 1.5rem);
+}
+
+@media (min-width: 1024px) {
+  .industrial-mobile-drawer {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    background-color: transparent;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+/* Custom Scrollbar for Component Panels */
+.industrial-panel-scroll::-webkit-scrollbar,
+.industrial-popover::-webkit-scrollbar,
+.industrial-dropdown::-webkit-scrollbar,
+.industrial-modal-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.industrial-panel-scroll::-webkit-scrollbar-track,
+.industrial-popover::-webkit-scrollbar-track,
+.industrial-dropdown::-webkit-scrollbar-track,
+.industrial-modal-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.industrial-panel-scroll::-webkit-scrollbar-thumb,
+.industrial-popover::-webkit-scrollbar-thumb,
+.industrial-dropdown::-webkit-scrollbar-thumb,
+.industrial-modal-content::-webkit-scrollbar-thumb {
+  background: var(--border-main, #334155);
+  border-radius: 10px;
+}
+
+.industrial-panel-scroll::-webkit-scrollbar-thumb:hover,
+.industrial-popover::-webkit-scrollbar-thumb:hover,
+.industrial-dropdown::-webkit-scrollbar-thumb:hover,
+.industrial-modal-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted, #475569);
+}

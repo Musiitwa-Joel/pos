@@ -1,0 +1,21 @@
+-- KIYINJI_OS_DATABASE_BACKUP
+-- TIMESTAMP: 2026-04-02T11:26:38.373Z
+
+-- Table attendance: 0 records exported.
+-- Table audit_logs: 13 records exported.
+-- Table cashier_shifts: 15 records exported.
+-- Table customer_payments: 3 records exported.
+-- Table customers: 1 records exported.
+-- Table employees: 2 records exported.
+-- Table expenses: 4 records exported.
+-- Table inventory_transactions: 240 records exported.
+-- Table payroll_records: 0 records exported.
+-- Table products: 25 records exported.
+-- Table promotions: 2 records exported.
+-- Table roles: 3 records exported.
+-- Table sale_items: 122 records exported.
+-- Table sale_returns: 9 records exported.
+-- Table sales: 53 records exported.
+-- Table suppliers: 17 records exported.
+-- Table system_settings: 6 records exported.
+-- Table users: 2 records exported.

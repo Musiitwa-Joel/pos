@@ -1,0 +1,20 @@
+{
+  "name": "my-bun-app",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "workspaces": [
+    "packages/*"
+  ],
+  "dependencies": {
+    "@apollo/client": "^3.11.0",
+    "graphql": "^16.0.0",
+    "vite-plugin-css-injected-by-js": "^3.5.2"
+  }
+}
