@@ -85,10 +85,15 @@ export default function POS({ onExit }: { onExit?: () => void }) {
         e.key === "Enter" &&
         document.activeElement === searchInputRef.current
       ) {
-        if (filteredProducts.length > 0) {
+        const topResult = filteredProducts[0];
+        if (topResult) {
           e.preventDefault();
-          addToCart(filteredProducts[0]);
-          setSearchQuery(""); // Clear search for the next item
+          if (topResult.stock > 0) {
+            addToCart(topResult);
+            setSearchQuery(""); // Clear search for the next item
+          } else {
+            toast.error(`STOCK_VOID: ${topResult.name.toUpperCase()} IS OUT OF STOCK`);
+          }
         }
         return;
       }
@@ -167,6 +172,11 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   };
 
   const addToCart = (product: Product) => {
+    if (product.stock <= 0) {
+      toast.error(`STOCK_VOID: ${product.name.toUpperCase()} IS OUT OF STOCK`);
+      return;
+    }
+
     const existing = cart.find((item) => item.id === product.id);
     if (existing && existing.quantity + 1 > product.stock) {
       toast.error(`INSUFFICIENT_STOCK: ONLY ${product.stock} ITEMS AVAILABLE`);
