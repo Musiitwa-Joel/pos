@@ -38,12 +38,18 @@ export default function GlobalReports() {
             Real-time telemetry and financial orchestration across the entire Tred-Vanguard ecosystem.
           </p>
         </div>
-        <div className="flex items-center gap-2 relative z-10">
-           <button className="industrial-btn-primary px-6 py-2.5 rounded-lg text-[9px] font-display font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand-accent/20">
-             <Globe size={14} />
-             Export Global Ledger
-           </button>
-        </div>
+          <div className="flex items-center gap-2 relative z-10">
+             <button 
+               disabled={institutions.length === 0}
+               className={cn(
+                 "industrial-btn-primary px-6 py-2.5 rounded-lg text-[9px] font-display font-black uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-brand-accent/20 transition-all duration-300",
+                 institutions.length === 0 && "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none"
+               )}
+             >
+               <Globe size={14} />
+               Export Global Ledger
+             </button>
+          </div>
         <BarChart3 size={300} className="absolute -right-20 -bottom-20 text-brand-accent/5 animate-pulse" />
       </div>
 

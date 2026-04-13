@@ -7,7 +7,7 @@ import ReturnsProcessingModal from './ReturnsProcessingModal';
 import { toast } from 'sonner';
 
 export default function SalesLogs() {
-  const { sales, customers, refreshSales, settings, recordReturn } = useHardware();
+  const { sales, customers, refreshSales, settings, recordReturn, isSalesLoading } = useHardware();
   const [searchQuery, setSearchQuery] = useState('');
 
   const today = getLocalDateString();
@@ -203,7 +203,10 @@ export default function SalesLogs() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print">
         <div className="flex-1 min-w-0">
           <h2 className="text-xl md:text-2xl font-display text-[var(--text-main)] truncate">Audit Trail</h2>
-          <p className="text-[9px] md:text-[10px] text-slate-900 dark:text-slate-500 font-mono mt-1 whitespace-nowrap overflow-hidden text-ellipsis">VERIFIED_TRANSACTION_LOGS // {sales.length}_RECORDS</p>
+          <p className="text-[9px] md:text-[10px] text-slate-900 dark:text-slate-500 font-mono mt-1 whitespace-nowrap overflow-hidden text-ellipsis flex items-center gap-2">
+            VERIFIED_TRANSACTION_LOGS // {sales.length}_RECORDS
+            {isSalesLoading && sales.length > 0 && <Loader2 size={10} className="animate-spin text-brand-accent inline" />}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
           <div className="flex items-center gap-2 flex-1 sm:flex-initial">
@@ -220,11 +223,25 @@ export default function SalesLogs() {
             />
           </div>
           <div className="flex gap-2 shrink-0">
-            <button onClick={handleExportCSV} className="btn-industrial btn-outline flex items-center gap-2 py-1.5 px-3 text-[9px] h-9">
+            <button 
+              onClick={handleExportCSV} 
+              disabled={filteredSales.length === 0}
+              className={cn(
+                "btn-industrial btn-outline flex items-center gap-2 py-1.5 px-3 text-[9px] h-9 transition-all duration-300",
+                filteredSales.length === 0 && "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none"
+              )}
+            >
               <Download size={12} />
               CSV
             </button>
-            <button onClick={handlePrintPDF} className="btn-industrial btn-outline flex items-center gap-2 py-1.5 px-3 text-[9px] h-9">
+            <button 
+              onClick={handlePrintPDF} 
+              disabled={filteredSales.length === 0}
+              className={cn(
+                "btn-industrial btn-outline flex items-center gap-2 py-1.5 px-3 text-[9px] h-9 transition-all duration-300",
+                filteredSales.length === 0 && "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none"
+              )}
+            >
               <Printer size={12} />
               PDF
             </button>
@@ -260,7 +277,18 @@ export default function SalesLogs() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto relative">
+          {isSalesLoading && sales.length === 0 && (
+            <div className="absolute inset-0 z-50 bg-white/60 dark:bg-[#0c0d0e]/60 backdrop-blur-[1px] flex flex-col items-center justify-center">
+              <div className="flex flex-col items-center gap-4 p-8 rounded-lg border border-brand-steel/10 bg-white dark:bg-[#121417] shadow-2xl">
+                <Loader2 className="w-10 h-10 text-brand-accent animate-spin" />
+                <div className="flex flex-col items-center gap-1 text-center">
+                  <span className="text-[10px] font-display text-brand-accent tracking-[0.2em] uppercase animate-pulse">Synchronizing_Ledger</span>
+                  <span className="text-[8px] font-mono text-slate-500 uppercase">Vanguard_Data_Buffer_Active</span>
+                </div>
+              </div>
+            </div>
+          )}
           {/* Desktop Table - Hidden on Mobile */}
           <table className="data-table hidden md:table">
             <thead>
@@ -464,7 +492,7 @@ export default function SalesLogs() {
               );
             })}
           </div>
-          {filteredSales.length === 0 && (
+          {filteredSales.length === 0 && !isSalesLoading && (
             <div className="p-10 sm:p-20 text-center text-slate-900 dark:text-slate-500">
               <Receipt size={48} className="mx-auto mb-4 opacity-20" />
               <p className="text-[10px] font-display uppercase tracking-[0.1em] sm:tracking-widest max-w-[180px] mx-auto leading-relaxed">

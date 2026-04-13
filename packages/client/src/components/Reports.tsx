@@ -1297,6 +1297,53 @@ export default function Reports() {
 
   if (selectedReport) {
     const currentMeta = REPORTS_METADATA.find((m) => m.id === selectedReport)!;
+    const startTs = new Date(dateRange.start).setHours(0, 0, 0, 0);
+    const endTs = new Date(dateRange.end).setHours(23, 59, 59, 999);
+
+    const isReportEmpty = (() => {
+      switch (selectedReport) {
+        case "SALES_SUMMARY":
+        case "DISCOUNT_REPORT":
+          return !sales.some((s) => {
+            const d = new Date(s.createdAt || s.timestamp).getTime();
+            return d >= startTs && d <= endTs;
+          });
+        case "PRODUCT_PERFORMANCE":
+          return productStats.length === 0;
+        case "INVENTORY_STOCK":
+        case "LOW_STOCK":
+          return (
+            products.length === 0 ||
+            (selectedReport === "LOW_STOCK" &&
+              !products.some((p) => p.stock <= p.minStock))
+          );
+        case "CREDIT_SALES":
+          return customers.length === 0;
+        case "SUPPLIER_PAYABLES":
+          return suppliers.length === 0;
+        case "CASH_FLOW":
+          return cashFlow.daily.length === 0;
+        case "DAILY_CASHIER":
+          return cashierShifts.length === 0;
+        case "PROFIT_MARGIN":
+          return !profitStats.products || profitStats.products.length === 0;
+        case "RETURNS_REFUNDS":
+          return !saleReturns.some((r) => {
+            const d = new Date(r.createdAt).getTime();
+            return d >= startTs && d <= endTs;
+          });
+        case "PURCHASE_REPORT":
+          return purchaseHistory.length === 0;
+        case "SALES_BY_CATEGORY":
+          return categoryStats.length === 0;
+        case "AUDIT_TRAIL":
+          return auditLogs.length === 0;
+        case "PROMOTION_MANAGER":
+          return promotions.length === 0;
+        default:
+          return false;
+      }
+    })();
 
     return (
       <div className="w-full max-w-[1200px] mx-auto px-4 py-4 md:py-6 h-full flex flex-col overflow-hidden space-y-4 md:space-y-6">
@@ -1384,11 +1431,11 @@ export default function Reports() {
               ) && (
                 <button
                   onClick={handleExportCSV}
-                  disabled={isOffline}
+                  disabled={isOffline || isReportEmpty}
                   className={cn(
-                    "btn-industrial btn-outline px-4 py-2 text-[9px] flex items-center gap-2",
-                    isOffline &&
-                      "opacity-80 dark:opacity-50 grayscale cursor-not-allowed",
+                    "btn-industrial btn-outline px-4 py-2 text-[9px] flex items-center gap-2 transition-all duration-300",
+                    (isOffline || isReportEmpty) &&
+                      "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none",
                   )}
                 >
                   <Download size={14} /> EXPORT_CSV
@@ -1396,11 +1443,11 @@ export default function Reports() {
               )}
               <button
                 onClick={handlePrint}
-                disabled={isOffline}
+                disabled={isOffline || isReportEmpty}
                 className={cn(
-                  "btn-industrial btn-primary px-4 py-2 text-[9px] flex items-center gap-2",
-                  isOffline &&
-                    "opacity-80 dark:opacity-50 grayscale cursor-not-allowed",
+                  "btn-industrial btn-primary px-4 py-2 text-[9px] flex items-center gap-2 transition-all duration-300",
+                  (isOffline || isReportEmpty) &&
+                    "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none",
                 )}
               >
                 <Printer size={14} /> PRINT_LOG

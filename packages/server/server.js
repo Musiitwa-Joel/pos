@@ -228,6 +228,7 @@ const serverCleanup = useServer({
 
 const server = new ApolloServer({
   schema,
+  introspection: true,
   plugins: [
     // Proper shutdown for the HTTP server.
     ApolloServerPluginDrainHttpServer({ httpServer }),
@@ -298,8 +299,11 @@ app.use(
 
       const isExempt = operationName && Array.from(exemptOperations).some(op => op.toLowerCase() === operationName.toLowerCase());
       // HSM v2.4: Unified Identity Handshake
-      // We always authenticate if a token is present to ensure correct routing.
-      await authenticateUser({ req });
+      // We always authenticate if a token is present to ensure correct routing, 
+      // EXCEPT for introspection/public handshakes which are handled as metadata telemetry.
+      if (!isExempt) {
+        await authenticateUser({ req });
+      }
 
       const currentUser = req.user || null;
       let activeDb = db; // Default to 'hardware' master DB

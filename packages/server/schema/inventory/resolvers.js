@@ -330,12 +330,12 @@ export default {
         const conditions = [];
  
         if (startDate && startDate.trim() !== "") {
-          conditions.push("created_at >= ?");
+          conditions.push("DATE(created_at) >= ?");
           params.push(startDate);
         }
         if (endDate && endDate.trim() !== "") {
-          const end = endDate.length <= 10 ? `${endDate} 23:59:59` : endDate;
-          conditions.push("created_at <= ?");
+          const end = endDate.length <= 10 ? endDate : endDate.split('T')[0];
+          conditions.push("DATE(created_at) <= ?");
           params.push(end);
         }
         if (search) {
@@ -347,7 +347,7 @@ export default {
           sql += " WHERE " + conditions.join(" AND ");
         }
  
-        sql += " ORDER BY created_at DESC LIMIT 100";
+        sql += " ORDER BY created_at DESC LIMIT 500";
         
         const [rows] = await db.query(sql, params);
         return rows.map(r => ({ 

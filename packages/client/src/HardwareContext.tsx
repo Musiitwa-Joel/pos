@@ -22,6 +22,7 @@ import {
   TEST_NOTIFICATION_SETTINGS
 } from './gql/settings';
 import { GET_SUPPLIERS, GET_PRODUCTS, GET_INVENTORY_TRANSACTIONS, GET_CUSTOMERS, GET_CUSTOMER_PAYMENTS, GET_ALL_CUSTOMER_PAYMENTS, GET_DAILY_DEBT_RECOVERED, GET_SALES, GET_EXPENSES, GET_AUDIT_LOGS, GET_SALE_RETURNS, GET_CASHIER_SHIFTS, GET_ACTIVE_SHIFT, GET_PROFIT_REPORT, GET_PROMOTIONS, GET_SHIFT_EXPECTED } from './gql/queries/inventory';
+import { getLocalDateString, getPastLocalDateString } from './lib/utils';
 import {
   ADD_SUPPLIER,
   UPDATE_SUPPLIER,
@@ -134,6 +135,7 @@ interface HardwareContextType {
   getSystemTelemetry: () => Promise<any>;
   backupDatabase: () => Promise<any>;
   testNotifications: (email: string) => Promise<void>;
+  isSalesLoading: boolean;
 }
 
 
@@ -205,10 +207,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [promotions, setPromotions] = useState<Promotion[]>([]);
   const [activeShift, setActiveShift] = useState<CashierShift | null>(null);
 
-  const [sales, setSales] = useState<Sale[]>(() => {
-    const saved = localStorage.getItem('khms_sales');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [sales, setSales] = useState<Sale[]>([]);
 
   const [customers, setCustomers] = useState<Customer[]>([]);
 
@@ -356,6 +355,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [globalLoading, setGlobalLoading] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [empLoading, setEmpLoading] = useState(false);
+  const [isSalesLoading, setIsSalesLoading] = useState(false);
   const [loadingStatus, setLoadingStatus] = useState('');
 
   // Smart Debounced Loading Helper (Directly connected to Server throughput)
@@ -465,6 +465,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const fetchSales = useCallback(async (startDate?: string, endDate?: string, search?: string) => {
     try {
+      setIsSalesLoading(true);
       const { data } = await client.query({
         query: GET_SALES,
         variables: { startDate, endDate, search },
@@ -473,6 +474,8 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       if (data?.sales) setSales(data.sales);
     } catch (err) {
       console.error('Fetch sales error:', err);
+    } finally {
+      setIsSalesLoading(false);
     }
   }, []);
 
@@ -574,7 +577,9 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             fetchRoles()
           ]);
         } else {
-          // 🏬 Store Context: Fetch full operational dataset
+          // 🏬 Store Context: Fetch full operational dataset (7-day window for dashboard delta)
+          const today = getLocalDateString();
+          const sevenDaysAgo = getPastLocalDateString(6);
           await Promise.all([
             fetchEmployees(),
             fetchAttendance(),
@@ -583,9 +588,9 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             fetchSuppliers(),
             fetchProducts(),
             fetchCustomers(),
-            fetchSales(),
-            fetchExpenses(),
-            fetchReturns(),
+            fetchSales(sevenDaysAgo, today),
+            fetchExpenses(sevenDaysAgo, today),
+            fetchReturns(sevenDaysAgo, today),
             fetchPromotions()
           ]);
 
@@ -606,13 +611,14 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   }, [currentUser, fetchEmployees, fetchAttendance, fetchSettings, fetchRoles, fetchSuppliers, fetchProducts, fetchCustomers, fetchSales, fetchExpenses, fetchReturns, fetchPromotions]);
 
   useEffect(() => {
+    localStorage.setItem('khms_expenses', JSON.stringify(expenses)); // Keep expenses for now as they are lighter
     localStorage.setItem('khms_promotions', JSON.stringify(promotions));
     if (currentUser) {
       localStorage.setItem('khms_user', JSON.stringify(currentUser));
     } else {
       localStorage.removeItem('khms_user');
     }
-  }, [sales, expenses, currentUser, promotions]);
+  }, [expenses, currentUser, promotions]);
 
   // 🏷️ Institutional Identity Protocol: Dynamic Browser Title
   useEffect(() => {
@@ -776,13 +782,17 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const adjustStock = async (productId: string, quantity: number, type: string, notes?: string) => {
-    await withLoading('ADJUSTING_STOCK', async () => {
-      await client.mutate({
-        mutation: ADJUST_STOCK,
-        variables: { productId, quantity, type, notes }
-      });
-      await fetchProducts();
-    }, true);
+    try {
+      await withLoading('ADJUSTING_STOCK', async () => {
+        await client.mutate({
+          mutation: ADJUST_STOCK,
+          variables: { productId, quantity, type, notes }
+        });
+        await fetchProducts();
+      }, true);
+    } catch (err) {
+      console.error('[adjustStock] Execution Failed:', err);
+    }
   };
 
   const isAddingSaleRef = React.useRef(false);
@@ -810,6 +820,9 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           await fetchCustomers();
         }
       }, true);
+    } catch (err) {
+      console.error('[addSale] Execution Failed:', err);
+      // withLoading already handled the toast message, we just prevent unhandled rejection here
     } finally {
       isAddingSaleRef.current = false;
     }
@@ -832,13 +845,17 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addCustomer = async (c: Omit<Customer, 'id' | 'balance' | 'createdAt' | 'updatedAt'>) => {
-    await withLoading('SAVING_CUSTOMER', async () => {
-      await client.mutate({
-        mutation: ADD_CUSTOMER,
-        variables: { ...c }
-      });
-      await fetchCustomers();
-    }, true);
+    try {
+      await withLoading('SAVING_CUSTOMER', async () => {
+        await client.mutate({
+          mutation: ADD_CUSTOMER,
+          variables: { ...c }
+        });
+        await fetchCustomers();
+      }, true);
+    } catch (err) {
+      console.error('[addCustomer] Execution Failed:', err);
+    }
   };
 
   const updateCustomer = async (id: string, updates: Partial<Customer>) => {
@@ -1095,13 +1112,17 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const togglePromotion = async (id: string) => {
-    await withLoading('TOGGLING_PROMOTION_STATUS', async () => {
-      await client.mutate({
-        mutation: TOGGLE_PROMOTION,
-        variables: { id }
-      });
-      await fetchPromotions();
-    }, true);
+    try {
+      await withLoading('TOGGLING_PROMOTION_STATUS', async () => {
+        await client.mutate({
+          mutation: TOGGLE_PROMOTION,
+          variables: { id }
+        });
+        await fetchPromotions();
+      }, true);
+    } catch (err) {
+      console.error('[togglePromotion] Execution Failed:', err);
+    }
   };
 
   const updatePromotion = async (id: string, updates: Partial<Promotion>) => {
@@ -1377,8 +1398,10 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     },
     refreshSales: async (startDate?: string, endDate?: string, search?: string, silent = true) => {
       try {
+        const start = startDate || getPastLocalDateString(6);
+        const end = endDate || getLocalDateString();
         await withLoading(silent ? undefined : 'SYNCING_SALES_LEDGER', async () => {
-          await fetchSales(startDate, endDate, search);
+          await fetchSales(start, end, search);
         }, false);
         if (!silent) toast.info('Sales ledger synchronized');
       } catch (err: any) {
@@ -1386,8 +1409,10 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toast.error(`Sync Failed: ${friendlyMsg}`);
       }
     },
-    refreshExpenses: async (start?: string, end?: string, search?: string, silent = true) => {
+    refreshExpenses: async (startDate?: string, endDate?: string, search?: string, silent = true) => {
       try {
+        const start = startDate || getPastLocalDateString(6);
+        const end = endDate || getLocalDateString();
         await withLoading(silent ? undefined : 'SYNCING_EXPENSE_LEDGER', async () => {
           await fetchExpenses(start, end, search);
         }, false);
@@ -1400,7 +1425,19 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     addSystemLog,
     recordReturn,
     saleReturns,
-    refreshReturns: fetchReturns,
+    refreshReturns: async (startDate?: string, endDate?: string, silent = true) => {
+      try {
+        const start = startDate || getPastLocalDateString(6);
+        const end = endDate || getLocalDateString();
+        await withLoading(silent ? undefined : 'SYNCING_RETURNS_LEDGER', async () => {
+          await fetchReturns(start, end);
+        }, false);
+        if (!silent) toast.info('Returns ledger synchronized');
+      } catch (err: any) {
+        const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
+        toast.error(`Sync Failed: ${friendlyMsg}`);
+      }
+    },
     openShift,
     closeShift,
     fetchAuditLogs,
@@ -1423,7 +1460,8 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     deleteCustomerPayment,
     getSystemTelemetry,
     backupDatabase,
-    testNotifications
+    testNotifications,
+    isSalesLoading
   }), [
     products, sales, customers, suppliers, expenses, employees, attendance, roles,
     currentUser, globalLoading, empLoading, isReady, isOffline, login, loginWithGoogle, logout, addProduct, updateProduct, 
@@ -1443,7 +1481,8 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     deleteCustomerPayment,
     getSystemTelemetry,
     backupDatabase,
-    testNotifications
+    testNotifications,
+    isSalesLoading
   ]);
 
   return (

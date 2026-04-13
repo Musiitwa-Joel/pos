@@ -361,7 +361,11 @@ export default function Expenses() {
           <div className="flex gap-2">
             <button
               onClick={handlePrintPDF}
-              className="btn-industrial btn-outline py-1 px-3 text-[8px] flex items-center gap-1"
+              disabled={filteredExpenses.length === 0}
+              className={cn(
+                "btn-industrial btn-outline py-1 px-3 text-[8px] flex items-center gap-1 transition-all duration-300",
+                filteredExpenses.length === 0 && "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none"
+              )}
             >
               <Printer size={10} /> PRINT_LEDGER
             </button>
