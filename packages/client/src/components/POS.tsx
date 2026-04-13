@@ -39,13 +39,17 @@ export default function POS({ onExit }: { onExit?: () => void }) {
     getShiftExpected,
     promotions,
     isOffline,
+    cart,
+    setCart,
+    paymentMethod,
+    setPaymentMethod,
+    selectedCustomerId,
+    setSelectedCustomerId,
+    posDiscount: discount,
+    setPosDiscount: setDiscount,
   } = useHardware();
   const [activeShift, setActiveShift] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
-  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
-  const [discount, setDiscount] = useState(0);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [checkoutTab, setCheckoutTab] = useState<'items' | 'settle'>('items');

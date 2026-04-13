@@ -23,6 +23,7 @@ export default function Suppliers() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [isPaymentProcessing, setIsPaymentProcessing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   const { suppliers, products, addSupplier, refreshSuppliers, adjustStock, updateSupplier, getInventoryTransactions, isOffline } = useHardware();
 
@@ -53,12 +54,41 @@ export default function Suppliers() {
 
     setIsSubmitting(true);
     try {
-      await addSupplier({ name: formData.name, contact: formData.contact, phone: formData.phone, email: formData.email });
+      if (isEditing && selectedSupplier) {
+        await updateSupplier(selectedSupplier.id, {
+          name: formData.name,
+          contact: formData.contact,
+          phone: formData.phone,
+          email: formData.email
+        });
+        toast.success('SUPPLIER_PROFILE_UPDATED');
+      } else {
+        await addSupplier({ name: formData.name, contact: formData.contact, phone: formData.phone, email: formData.email });
+        toast.success('SUPPLIER_ONBOARDED');
+      }
       setIsModalOpen(false);
       setFormData({ name: '', contact: '', phone: '', email: '' });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const openEditModal = () => {
+    if (!selectedSupplier) return;
+    setIsEditing(true);
+    setFormData({
+      name: selectedSupplier.name,
+      contact: selectedSupplier.contact || '',
+      phone: selectedSupplier.phone || '',
+      email: selectedSupplier.email || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const openOnboardModal = () => {
+    setIsEditing(false);
+    setFormData({ name: '', contact: '', phone: '', email: '' });
+    setIsModalOpen(true);
   };
 
   const handlePOSubmit = async (e: React.FormEvent) => {
@@ -168,7 +198,7 @@ export default function Suppliers() {
             <Upload size={14} />IMPORT_VENDORS
           </button>
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={openOnboardModal}
             disabled={isOffline}
             className={cn("btn-industrial btn-primary flex items-center justify-center gap-2 py-2.5 sm:py-2 text-[9px] sm:text-[10px]", isOffline && "opacity-80 dark:opacity-50 grayscale cursor-not-allowed")}
           >
@@ -232,8 +262,17 @@ export default function Suppliers() {
                     <div className="w-12 h-12 bg-brand-steel/30 flex items-center justify-center text-brand-accent">
                       <Truck size={24} />
                     </div>
-                    <div>
-                      <h2 className="text-xl font-display text-[var(--text-main)]">{selectedSupplier.name}</h2>
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-3">
+                        <h2 className="text-xl font-display text-[var(--text-main)]">{selectedSupplier.name}</h2>
+                        <button
+                          onClick={openEditModal}
+                          className="p-1 hover:bg-brand-steel/20 text-brand-accent transition-colors rounded-sm"
+                          title="EDIT_VENDOR_PROFILE"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-pencil"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><path d="m15 5 4 4" /></svg>
+                        </button>
+                      </div>
                       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 mt-1">
                         <span className="flex items-center gap-1 text-[10px] font-mono text-[var(--text-muted)] font-medium"><Phone size={10} /> {selectedSupplier.phone}</span>
                         <span className="flex items-center gap-1 text-[10px] font-mono text-[var(--text-muted)] font-medium"><Mail size={10} /> {selectedSupplier.contact}</span>
@@ -513,8 +552,8 @@ export default function Suppliers() {
         </form>
       </Modal>
 
-      {/* Onboard Supplier Modal */}
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="ONBOARD_NEW_SUPPLIER" maxWidth="max-w-md">
+      {/* Onboard/Edit Supplier Modal */}
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditing ? `EDIT_VENDOR // ${selectedSupplier?.name}` : "ONBOARD_NEW_SUPPLIER"} maxWidth="max-w-md">
         <form className="space-y-4" onSubmit={handleOnboardSubmit}>
           {[
             { label: 'BUSINESS_NAME *', key: 'name', placeholder: 'e.g. Uganda Baati Ltd' },
@@ -530,8 +569,8 @@ export default function Suppliers() {
             </div>
           ))}
           <button type="submit" disabled={isSubmitting} className="btn-industrial btn-primary w-full py-2 flex items-center justify-center gap-2 mt-2">
-            {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-            {isSubmitting ? 'PROCESSING...' : 'ONBOARD_SUPPLIER'}
+            {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : (isEditing ? <path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /> : <Plus size={14} />)}
+            {isSubmitting ? 'PROCESSING...' : (isEditing ? 'UPDATE_VENDOR_PROFILE' : 'ONBOARD_SUPPLIER')}
           </button>
         </form>
       </Modal>

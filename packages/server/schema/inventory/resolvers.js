@@ -1235,6 +1235,36 @@ export default {
       await db.query("DELETE FROM expenses WHERE id = ?", [id]);
       return id;
     },
+    updateExpense: async (_, args, { db }) => {
+      const { id, ...updates } = args;
+      const fields = [];
+      const params = [];
+
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value !== undefined) {
+          fields.push(`${key} = ?`);
+          params.push(value);
+        }
+      });
+
+      if (fields.length > 0) {
+        params.push(id);
+        await db.query(`UPDATE expenses SET ${fields.join(', ')} WHERE id = ?`, params);
+      }
+
+      const [rows] = await db.query("SELECT * FROM expenses WHERE id = ?", [id]);
+      const r = rows[0];
+      return {
+        id: r.id,
+        category: r.category,
+        amount: parseFloat(r.amount),
+        description: r.description,
+        date: r.date instanceof Date ? r.date.toISOString() : (r.date || new Date().toISOString()),
+        authorizedBy: r.authorized_by,
+        createdAt: r.created_at?.toISOString(),
+        updatedAt: r.updated_at?.toISOString()
+      };
+    },
     addSystemLog: async (_, args, { db, user }) => {
       const { action, target, oldValue, newValue } = args;
       const id = uuidv7();

@@ -237,6 +237,13 @@ export default `
     ): Expense!
 
     deleteExpense(id: ID!): String!
+    updateExpense(
+      id: ID!
+      category: String
+      amount: Float
+      description: String
+      date: String
+    ): Expense!
 
     # Reporting & Audit Mutations
     addSystemLog(
@@ -337,6 +344,7 @@ export default `
     date: String!
     authorizedBy: String
     createdAt: String
+    updatedAt: String
   }
 
   type DateProfit {

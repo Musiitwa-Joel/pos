@@ -69,7 +69,7 @@ export default function SettingsView() {
         toast.success(`SYSTEM_BACKUP_SUCCESS: ${result.filename} (${result.size.toFixed(2)} KB)`);
         
         // Automated Handshake: Trigger browser download
-        const downloadUrl = `http://localhost:9000/backups/${result.filename}`;
+        const downloadUrl = `${window.location.origin.replace(':3000', ':9000')}/backups/${result.filename}`;
         const link = document.createElement('a');
         link.href = downloadUrl;
         link.setAttribute('download', result.filename);
@@ -250,7 +250,7 @@ export default function SettingsView() {
                           setNewRoleName('');
                           setNewRoleDesc('');
                         } finally {
-                          setIsSubmittingRole(true);
+                          setIsSubmittingRole(false);
                         }
                       }}
                       disabled={isSubmittingRole || isOffline}

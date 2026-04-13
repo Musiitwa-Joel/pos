@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Receipt, Search, Filter, Download, ArrowRight, User, CreditCard, Printer, RotateCcw, X, ShieldAlert, CheckCircle2, Package, Minus, Plus, Loader2 } from 'lucide-react';
 import { useHardware } from '../HardwareContext';
-import { formatCurrency, cn, getLocalDateString } from '../lib/utils';
+import { formatCurrency, cn, getLocalDateString, exportToCSV } from '../lib/utils';
 import DatePicker from './DatePicker';
 import ReturnsProcessingModal from './ReturnsProcessingModal';
 import { toast } from 'sonner';
@@ -34,8 +34,7 @@ export default function SalesLogs() {
   const filteredSales = sales; // Filtering now happens server-side
 
   const handleExportCSV = () => {
-    const headers = ['Transaction ID', 'Timestamp', 'Cashier', 'Customer', 'Items', 'Payment Method', 'Total'];
-    const rows = filteredSales.map(sale => {
+    const data = filteredSales.map(sale => {
       const customer = customers.find(c => c.id === sale.customerId);
       let cashierName = sale.cashierName || sale.cashierId;
       if (!cashierName || cashierName === 'unknown') cashierName = 'SYSTEM_AUTO';
@@ -45,23 +44,29 @@ export default function SalesLogs() {
         return `${i.productName || i.name} (x${net}${i.returnedQuantity > 0 ? ` [-${i.returnedQuantity}_RET]` : ''})`;
       }).join('; ') || '';
 
-      return [
-        sale.id,
-        stamp.toLocaleString().replace(/,/g, ''),
-        cashierName,
-        customer?.name || 'Walk-in Customer',
-        `"${itemsString}"`,
-        sale.paymentMethod,
-        sale.total
-      ].join(',');
+      return {
+        'Transaction ID': sale.id,
+        'Timestamp': stamp.toLocaleString(),
+        'Cashier': cashierName,
+        'Customer': customer?.name || 'Walk-in Customer',
+        'Items': itemsString,
+        'Payment Method': sale.paymentMethod,
+        'Total': sale.total
+      };
     });
 
-    const csvContent = [headers.join(','), ...rows].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Verified_Audit_Trail_${new Date().toISOString().split('T')[0]}.csv`;
-    link.click();
+    const headers = ['Transaction ID', 'Timestamp', 'Cashier', 'Customer', 'Items', 'Payment Method', 'Total'];
+    const rows = data.map(sale => [
+      sale['Transaction ID'],
+      sale['Timestamp'],
+      sale['Cashier'],
+      sale['Customer'],
+      sale['Items'],
+      sale['Payment Method'],
+      sale['Total']
+    ]);
+
+    exportToCSV(`Verified_Audit_Trail_${new Date().toISOString().split('T')[0]}`, headers, rows);
   };
 
   const totalValue = filteredSales.reduce((acc, s) => acc + s.total, 0);
@@ -410,6 +415,15 @@ export default function SalesLogs() {
               })}
             </tbody>
           </table>
+
+          <div className="hidden md:flex p-3 bg-black/5 border-t border-brand-steel/30 justify-between items-center no-print bg-slate-100 dark:bg-black/20">
+            <span className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
+              FILTERED_CUMULATIVE_TOTAL_FOR_PERIOD
+            </span>
+            <span className="text-sm font-display text-brand-accent font-bold">
+              {formatCurrency(totalValue)}
+            </span>
+          </div>
 
           {/* Mobile Card Stack - Hidden on Desktop */}
           <div className="md:hidden p-3 space-y-3 pb-20">

@@ -36,6 +36,7 @@ export default function Expenses() {
     deleteExpense,
     currentUser,
     refreshExpenses,
+    updateExpense,
     settings,
     isOffline,
   } = useHardware();
@@ -97,9 +98,23 @@ export default function Expenses() {
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingExpense) return;
+    
+    const form = e.currentTarget as HTMLFormElement;
+    const desc = (form.elements.namedItem('description') as HTMLInputElement).value;
+    const amount = (form.elements.namedItem('amount') as HTMLInputElement).value;
+    const category = editingExpense.category;
+
+    if (!desc) return toast.error("DESCRIPTION_REQUIRED");
+    if (!amount || Number(amount) <= 0) return toast.error("INVALID_AMOUNT");
+
     setIsSubmitting(true);
     try {
-      toast.info("EDIT_NOT_IMPLEMENTED_ON_SERVER_YET");
+      await updateExpense(editingExpense.id, {
+        description: desc,
+        amount: parseFloat(amount),
+        category: category
+      });
       setEditingExpense(null);
     } finally {
       setIsSubmitting(false);
@@ -536,7 +551,9 @@ export default function Expenses() {
             </label>
             <input
               type="text"
+              name="description"
               className="terminal-input w-full p-2 text-xs"
+              placeholder="ENTER_EXPENSE_DETAILS..."
               defaultValue={editingExpense?.description}
             />
           </div>
@@ -547,6 +564,7 @@ export default function Expenses() {
               </label>
               <input
                 type="number"
+                name="amount"
                 className="terminal-input w-full p-2 text-xs"
                 defaultValue={editingExpense?.amount}
               />

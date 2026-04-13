@@ -99,6 +99,8 @@ export interface Expense {
   amount: number;
   description: string;
   authorizedBy?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CustomerPayment {

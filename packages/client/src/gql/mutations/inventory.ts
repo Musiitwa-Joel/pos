@@ -203,6 +203,20 @@ export const DELETE_EXPENSE = gql`
   }
 `;
 
+export const UPDATE_EXPENSE = gql`
+  mutation UpdateExpense($id: ID!, $category: String, $amount: Float, $description: String, $date: String) {
+    updateExpense(id: $id, category: $category, amount: $amount, description: $description, date: $date) {
+      id
+      category
+      amount
+      description
+      date
+      authorizedBy
+      updatedAt
+    }
+  }
+`;
+
 export const ADD_SYSTEM_LOG = gql`
   mutation AddSystemLog($action: String!, $target: String!, $oldValue: String, $newValue: String) {
     addSystemLog(action: $action, target: $target, oldValue: $oldValue, newValue: $newValue) {

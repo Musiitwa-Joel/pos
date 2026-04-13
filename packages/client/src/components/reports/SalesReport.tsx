@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TrendingUp, ShoppingCart, Search, BarChart3 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -22,6 +22,23 @@ interface SalesReportProps {
 }
 
 export default function SalesReport({ type, salesSummary, productStats, searchQuery, onSearchChange }: SalesReportProps) {
+  const byMethodData = useMemo(() => 
+    Object.entries(salesSummary.byMethod).map(([k, v]) => ({ name: k.toUpperCase(), value: v })),
+    [salesSummary.byMethod]
+  );
+
+  const filteredStats = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return searchQuery 
+      ? productStats.filter((item: any) => item.name.toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
+      : productStats;
+  }, [productStats, searchQuery]);
+
+  const maxRevenue = useMemo(() => 
+    Math.max(1, (productStats[0] as any)?.revenue || 0),
+    [productStats]
+  );
+
   if (type === 'SALES_SUMMARY') {
     return (
       <div className="flex-1 flex flex-col gap-6 overflow-hidden h-full">
@@ -59,7 +76,7 @@ export default function SalesReport({ type, salesSummary, productStats, searchQu
             </div>
             <div className="flex-1 min-h-[250px] md:min-h-0">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={Object.entries(salesSummary.byMethod).map(([k, v]) => ({ name: k.toUpperCase(), value: v }))}>
+                <BarChart data={byMethodData}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-main)" />
                   <XAxis dataKey="name" fontSize={10} axisLine={false} tickLine={false} stroke="var(--text-muted)" />
                   <YAxis fontSize={9} axisLine={false} tickLine={false} stroke="var(--text-muted)" tickFormatter={(v) => `${(v/1000).toFixed(0)}K`} />
@@ -70,7 +87,7 @@ export default function SalesReport({ type, salesSummary, productStats, searchQu
                     formatter={(v: any) => formatCurrency(v)}
                   />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                    {Object.entries(salesSummary.byMethod).map((entry, index) => (
+                    {byMethodData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={index === 0 ? '#f97316' : index === 1 ? '#22c55e' : '#3b82f6'} />
                     ))}
                   </Bar>
@@ -95,9 +112,9 @@ export default function SalesReport({ type, salesSummary, productStats, searchQu
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(salesSummary.byMethod).map(([method, value]: [string, any]) => (
-                    <tr key={method} className="hover:bg-brand-steel/5">
-                      <td className="text-[10px] uppercase font-display">{method}</td>
+                  {byMethodData.map(({ name, value }) => (
+                    <tr key={name} className="hover:bg-brand-steel/5">
+                      <td className="text-[10px] uppercase font-display">{name}</td>
                       <td className="text-right font-mono text-xs text-[var(--text-main)] font-bold">{formatCurrency(value)}</td>
                       <td className="text-right font-mono text-xs text-slate-800 dark:text-slate-400">
                         {((value / (salesSummary.totalRevenue || 1)) * 100).toFixed(1)}%
@@ -114,11 +131,6 @@ export default function SalesReport({ type, salesSummary, productStats, searchQu
   }
 
   // PRODUCT_PERFORMANCE
-  const query = searchQuery.toLowerCase();
-  const filteredStats = searchQuery 
-    ? productStats.filter((item: any) => item.name.toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
-    : productStats;
-
   return (
     <div className="industrial-panel flex-1 flex flex-col overflow-visible">
       <div className="p-4 border-b border-brand-steel flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 bg-brand-dark/30">
@@ -170,7 +182,7 @@ export default function SalesReport({ type, salesSummary, productStats, searchQu
                      <div className="flex-1 h-1 bg-brand-steel/30 rounded-full overflow-hidden max-w-[40px] md:max-w-[100px]">
                        <div 
                          className="h-full bg-brand-accent" 
-                         style={{ width: `${Math.min(100, (item.revenue / (Math.max(1, (productStats[0] as any)?.revenue || 0))) * 100)}%` }} 
+                         style={{ width: `${Math.min(100, (item.revenue / maxRevenue) * 100)}%` }} 
                        />
                      </div>
                      <span className="text-[9px] md:text-[10px] font-mono text-slate-800 dark:text-slate-400 w-10 md:w-12 text-right">{((item.revenue / (salesSummary.totalRevenue || 1)) * 100).toFixed(0)}%</span>

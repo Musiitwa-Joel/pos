@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider, gql } from '@apollo/client';
-import { Product, Sale, Customer, Supplier, Expense, User, Employee, Role, AttendanceRecord, Promotion, CashierShift } from './types';
+import { Product, Sale, Customer, Supplier, Expense, User, Employee, Role, AttendanceRecord, Promotion, CashierShift, CartItem, PaymentMethod } from './types';
 import { GET_EMPLOYEES, GET_ATTENDANCE } from './gql/queries/hr';
 import {
   ADD_EMPLOYEE,
@@ -39,6 +39,7 @@ import {
   RECORD_PAYMENT,
   ADD_EXPENSE,
   DELETE_EXPENSE,
+  UPDATE_EXPENSE,
   ADD_SYSTEM_LOG,
   RECORD_RETURN,
   OPEN_SHIFT,
@@ -70,13 +71,19 @@ interface HardwareContextType {
   loading: boolean;
   isReady: boolean;
   login: (email: string, password: string) => Promise<string | undefined>;
-  loginWithGoogle: (idToken: string) => Promise<string | undefined>;
+  loginWithGoogle: (token: string) => Promise<void>;
   logout: () => void;
+  addSupplier: (supplier: { name: string; contact?: string; phone?: string; email?: string; }) => Promise<void>;
+  updateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;
+  deleteSupplier: (id: string) => Promise<void>;
+  refreshSuppliers: (silent?: boolean) => Promise<void>;
   addProduct: (product: Omit<Product, 'id' | 'stock'> & { initialStock?: number }) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   retireProduct: (id: string) => Promise<void>;
   adjustStock: (productId: string, quantity: number, type: string, notes?: string) => Promise<void>;
+  refreshInventory: (silent?: boolean) => Promise<void>;
   addSale: (sale: Omit<Sale, 'id' | 'timestamp'> & { clientTxId?: string }) => Promise<any>;
+  refreshSales: (startDate?: string, endDate?: string, search?: string, silent?: boolean) => Promise<void>;
   addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
   deleteCustomer: (id: string) => Promise<void>;
@@ -85,9 +92,11 @@ interface HardwareContextType {
   customerPayments: any[];
   refreshAllCustomerPayments: (startDate?: string, endDate?: string) => Promise<void>;
   saleReturns: any[];
-  refreshReturns: (startDate?: string, endDate?: string) => Promise<void>;
+  refreshReturns: (startDate?: string, endDate?: string, silent?: boolean) => Promise<void>;
   addExpense: (expense: { category: string, amount: number, description?: string, date?: string }) => Promise<void>;
+  updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  refreshExpenses: (startDate?: string, endDate?: string, search?: string, silent?: boolean) => Promise<void>;
   addEmployee: (employee: Omit<Employee, 'id' | 'joinedDate'>) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   refreshEmployees: (silent?: boolean) => Promise<void>;
@@ -100,14 +109,7 @@ interface HardwareContextType {
   settings: Record<string, string>;
   updateSetting: (key: string, value: string) => Promise<void>;
   initializeSettingsDB: () => Promise<void>;
-  addSupplier: (supplier: { name: string; contact?: string; phone?: string; email?: string; }) => Promise<void>;
-  updateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;
-  deleteSupplier: (id: string) => Promise<void>;
   initializeInventoryDB: () => Promise<void>;
-  refreshInventory: (silent?: boolean) => Promise<void>;
-  refreshSuppliers: (silent?: boolean) => Promise<void>;
-  refreshSales: (startDate?: string, endDate?: string, search?: string, silent?: boolean) => Promise<void>;
-  refreshExpenses: (startDate?: string, endDate?: string, search?: string, silent?: boolean) => Promise<void>;
   getInventoryTransactions: (productId?: string, startDate?: string, endDate?: string) => Promise<any[]>;
   getCustomerPayments: (customerId: string) => Promise<any[]>;
   getDailyDebtRecovered: () => Promise<number>;
@@ -136,6 +138,15 @@ interface HardwareContextType {
   backupDatabase: () => Promise<any>;
   testNotifications: (email: string) => Promise<void>;
   isSalesLoading: boolean;
+  cart: CartItem[];
+  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+  posDiscount: number;
+  setPosDiscount: React.Dispatch<React.SetStateAction<number>>;
+  selectedCustomerId: string;
+  setSelectedCustomerId: React.Dispatch<React.SetStateAction<string>>;
+  paymentMethod: PaymentMethod;
+  setPaymentMethod: React.Dispatch<React.SetStateAction<PaymentMethod>>;
+  withLoading: (displayStatus: string | undefined, fn: () => Promise<void>, showToast?: boolean) => Promise<void>;
 }
 
 
@@ -144,8 +155,10 @@ const HardwareContext = createContext<HardwareContextType | undefined>(undefined
 // Dynamic API resolution for Cloud Hosting support
 const getApiBaseUrl = () => {
   try {
-    // Check Vite-style env
-    const viteEnv = (import.meta as any).env?.VITE_API_BASE_URL;
+    // Check for Vite meta (env) - use string indexing to bypass strict module checks
+    // @ts-ignore
+    const meta = (import.meta as any);
+    const viteEnv = meta.env?.VITE_API_BASE_URL;
     if (viteEnv) return viteEnv;
 
     // Check Bun/Node-style env
@@ -221,6 +234,12 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     const saved = localStorage.getItem('khms_user');
     return saved ? JSON.parse(saved) : null;
   });
+
+  // Global POS Terminal Session Persistence
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [posDiscount, setPosDiscount] = useState(0);
+  const [selectedCustomerId, setSelectedCustomerId] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
 
   // Connectivity & Server Heartbeat Monitoring
   const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
@@ -747,23 +766,31 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 
   const addProduct = async (p: Omit<Product, 'id' | 'stock'> & { initialStock?: number }) => {
-    await withLoading('SAVING_PRODUCT', async () => {
-      await client.mutate({
-        mutation: ADD_PRODUCT,
-        variables: { ...p }
-      });
-      await fetchProducts();
-    }, true);
+    try {
+      await withLoading('SAVING_PRODUCT', async () => {
+        await client.mutate({
+          mutation: ADD_PRODUCT,
+          variables: { ...p }
+        });
+        await fetchProducts();
+      }, true);
+    } catch (err) {
+      console.error('[addProduct] Execution Failed:', err);
+    }
   };
 
   const updateProduct = async (id: string, updates: Partial<Product>) => {
-    await withLoading('UPDATING_PRODUCT', async () => {
-      await client.mutate({
-        mutation: UPDATE_PRODUCT,
-        variables: { id, ...updates }
-      });
-      await fetchProducts();
-    }, true);
+    try {
+      await withLoading('UPDATING_PRODUCT', async () => {
+        await client.mutate({
+          mutation: UPDATE_PRODUCT,
+          variables: { id, ...updates }
+        });
+        await fetchProducts();
+      }, true);
+    } catch (err) {
+      console.error('[updateProduct] Execution Failed:', err);
+    }
   };
 
    const retireProduct = async (id: string) => {
@@ -859,49 +886,65 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updateCustomer = async (id: string, updates: Partial<Customer>) => {
-    await withLoading('UPDATING_CUSTOMER', async () => {
-      await client.mutate({
-        mutation: UPDATE_CUSTOMER,
-        variables: { id, ...updates }
-      });
-      await fetchCustomers();
-    }, true);
+    try {
+      await withLoading('UPDATING_CUSTOMER', async () => {
+        await client.mutate({
+          mutation: UPDATE_CUSTOMER,
+          variables: { id, ...updates }
+        });
+        await fetchCustomers();
+      }, true);
+    } catch (err) {
+      console.error('[updateCustomer] Execution Failed:', err);
+    }
   };
 
   const deleteCustomer = async (id: string) => {
-    await withLoading('DELETING_CUSTOMER', async () => {
-      await client.mutate({
-        mutation: DELETE_CUSTOMER,
-        variables: { id }
-      });
-      await fetchCustomers();
-    }, true);
+    try {
+      await withLoading('DELETING_CUSTOMER', async () => {
+        await client.mutate({
+          mutation: DELETE_CUSTOMER,
+          variables: { id }
+        });
+        await fetchCustomers();
+      }, true);
+    } catch (err) {
+      console.error('[deleteCustomer] Execution Failed:', err);
+    }
   };
 
   const recordPayment = async (customerId: string, amount: number, paymentMethod: string, reference?: string, notes?: string, shiftId?: string) => {
-    await withLoading('RECORDING_PAYMENT', async () => {
-      await client.mutate({
-        mutation: RECORD_PAYMENT,
-        variables: { customerId, amount, paymentMethod, reference, notes, shiftId: shiftId || activeShift?.id }
-      });
-      await fetchCustomers();
-      // Ensure money shows up in reports immediately
-      const todayString = new Date().toISOString().split('T')[0];
-      await refreshAllCustomerPayments(todayString, todayString);
-    }, true);
+    try {
+      await withLoading('RECORDING_PAYMENT', async () => {
+        await client.mutate({
+          mutation: RECORD_PAYMENT,
+          variables: { customerId, amount, paymentMethod, reference, notes, shiftId: shiftId || activeShift?.id }
+        });
+        await fetchCustomers();
+        // Ensure money shows up in reports immediately
+        const todayString = new Date().toISOString().split('T')[0];
+        await refreshAllCustomerPayments(todayString, todayString);
+      }, true);
+    } catch (err) {
+      console.error('[recordPayment] Execution Failed:', err);
+    }
   };
 
   const deleteCustomerPayment = async (id: string) => {
-    await withLoading('DELETING_PAYMENT', async () => {
-      await client.mutate({
-        mutation: DELETE_CUSTOMER_PAYMENT,
-        variables: { id }
-      });
-      await fetchCustomers();
-      // Sync reports after rollback
-      const todayString = new Date().toISOString().split('T')[0];
-      await refreshAllCustomerPayments(todayString, todayString);
-    }, true);
+    try {
+      await withLoading('DELETING_PAYMENT', async () => {
+        await client.mutate({
+          mutation: DELETE_CUSTOMER_PAYMENT,
+          variables: { id }
+        });
+        await fetchCustomers();
+        // Sync reports after rollback
+        const todayString = new Date().toISOString().split('T')[0];
+        await refreshAllCustomerPayments(todayString, todayString);
+      }, true);
+    } catch (err) {
+      console.error('[deleteCustomerPayment] Execution Failed:', err);
+    }
   };
 
   const updateCustomerBalance = (id: string, amount: number) => {
@@ -909,13 +952,32 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addExpense = async (e: { category: string, amount: number, description?: string, date?: string }) => {
-    await withLoading('SAVING_EXPENSE', async () => {
-      await client.mutate({
-        mutation: ADD_EXPENSE,
-        variables: { ...e }
-      });
-      await fetchExpenses();
-    }, true);
+    try {
+      await withLoading('SAVING_EXPENSE', async () => {
+        await client.mutate({
+          mutation: ADD_EXPENSE,
+          variables: { ...e }
+        });
+        await fetchExpenses();
+      }, true);
+    } catch (err) {
+      console.error('[addExpense] Execution Failed:', err);
+    }
+  };
+
+  const updateExpense = async (id: string, updates: Partial<Expense>) => {
+    try {
+      await withLoading('UPDATING_EXPENSE', async () => {
+        await client.mutate({
+          mutation: UPDATE_EXPENSE,
+          variables: { id, ...updates }
+        });
+        await fetchExpenses();
+        toast.success('Expense updated');
+      }, true);
+    } catch (err: any) {
+      toast.error(`Update Failed: ${err.message}`);
+    }
   };
 
   const deleteExpense = async (id: string) => {
@@ -1090,25 +1152,33 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const addPromotion = async (p: Omit<Promotion, 'id' | 'isActive'>) => {
-    await withLoading('CONFIGURING_PROMOTION', async () => {
-      await client.mutate({
-        mutation: ADD_PROMOTION,
-        variables: { ...p }
-      });
-      await fetchPromotions();
-      toast.success(p.productIds?.length ? `Targeted Promotion: ${p.name} Active` : 'Store-wide Promotion Scheduled');
-    }, true);
+    try {
+      await withLoading('CONFIGURING_PROMOTION', async () => {
+        await client.mutate({
+          mutation: ADD_PROMOTION,
+          variables: { ...p }
+        });
+        await fetchPromotions();
+        toast.success(p.productIds?.length ? `Targeted Promotion: ${p.name} Active` : 'Store-wide Promotion Scheduled');
+      }, true);
+    } catch (err) {
+      console.error('[addPromotion] Execution Failed:', err);
+    }
   };
 
   const deletePromotion = async (id: string) => {
-    await withLoading('REMOVING_PROMOTION', async () => {
-      await client.mutate({
-        mutation: DELETE_PROMOTION,
-        variables: { id }
-      });
-      await fetchPromotions();
-      toast.info('Promotion removed');
-    }, true);
+    try {
+      await withLoading('REMOVING_PROMOTION', async () => {
+        await client.mutate({
+          mutation: DELETE_PROMOTION,
+          variables: { id }
+        });
+        await fetchPromotions();
+        toast.info('Promotion removed');
+      }, true);
+    } catch (err) {
+      console.error('[deletePromotion] Execution Failed:', err);
+    }
   };
 
   const togglePromotion = async (id: string) => {
@@ -1126,14 +1196,18 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   const updatePromotion = async (id: string, updates: Partial<Promotion>) => {
-    await withLoading('UPDATING_PROMOTION_CONFIG', async () => {
-      await client.mutate({
-        mutation: UPDATE_PROMOTION,
-        variables: { id, ...updates }
-      });
-      await fetchPromotions();
-      toast.success('Promotion updated');
-    }, true);
+    try {
+      await withLoading('UPDATING_PROMOTION_CONFIG', async () => {
+        await client.mutate({
+          mutation: UPDATE_PROMOTION,
+          variables: { id, ...updates }
+        });
+        await fetchPromotions();
+        toast.success('Promotion updated');
+      }, true);
+    } catch (err) {
+      console.error('[updatePromotion] Execution Failed:', err);
+    }
   };
 
   const deleteRole = async (id: string) => {
@@ -1422,6 +1496,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         toast.error(`Sync Failed: ${friendlyMsg}`);
       }
     },
+    updateExpense,
     addSystemLog,
     recordReturn,
     saleReturns,
@@ -1461,7 +1536,16 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     getSystemTelemetry,
     backupDatabase,
     testNotifications,
-    isSalesLoading
+    isSalesLoading,
+    cart,
+    setCart,
+    posDiscount,
+    setPosDiscount,
+    selectedCustomerId,
+    setSelectedCustomerId,
+    paymentMethod,
+    setPaymentMethod,
+    withLoading,
   }), [
     products, sales, customers, suppliers, expenses, employees, attendance, roles,
     currentUser, globalLoading, empLoading, isReady, isOffline, login, loginWithGoogle, logout, addProduct, updateProduct, 
@@ -1473,7 +1557,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     initializeSettingsDB, addSupplier, updateSupplier, deleteSupplier, 
     initializeInventoryDB, getInventoryTransactions, getCustomerPayments, 
     getDailyDebtRecovered, withLoading, fetchProducts, fetchSuppliers, 
-    fetchSales, fetchExpenses, addSystemLog, recordReturn, saleReturns, 
+    fetchSales, fetchExpenses, updateExpense, addSystemLog, recordReturn, saleReturns, 
     fetchReturns, openShift, closeShift, fetchAuditLogs, fetchSaleReturns, 
     fetchCashierShifts, getActiveShift, activeShift, loadingStatus, fetchProfitReport,
     searchSaleByInvoice, promotions, addPromotion, updatePromotion, deletePromotion, togglePromotion, fetchPromotions,
@@ -1482,7 +1566,11 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     getSystemTelemetry,
     backupDatabase,
     testNotifications,
-    isSalesLoading
+    isSalesLoading,
+    cart,
+    posDiscount,
+    selectedCustomerId,
+    paymentMethod
   ]);
 
   return (
