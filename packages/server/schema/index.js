@@ -3,6 +3,7 @@ import { mergeTypeDefs, mergeResolvers } from "@graphql-tools/merge";
 import { loadFiles } from "@graphql-tools/load-files";
 import path from "path";
 import { fileURLToPath } from "url";
+import GraphQLUpload from "graphql-upload/GraphQLUpload.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -53,6 +54,7 @@ const typeDefs = mergeTypeDefs(
 
 const resolvers = mergeResolvers(
   [
+    { Upload: GraphQLUpload },
     ...(allResolvers || []),
     hrResolvers,
     settingsResolvers,

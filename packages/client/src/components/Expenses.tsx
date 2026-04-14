@@ -15,6 +15,7 @@ import {
   Printer,
   Download,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
 import { useHardware } from "../HardwareContext";
 import { Expense } from "../types";
@@ -131,7 +132,8 @@ export default function Expenses() {
     "Other",
   ];
 
-  const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const activeExpenses = expenses.filter(e => e.status !== 'VOIDED');
+  const totalExpenses = activeExpenses.reduce((sum, e) => sum + e.amount, 0);
   const filteredExpenses = expenses.filter(
     (e) =>
       e.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -402,41 +404,45 @@ export default function Expenses() {
             <tbody>
               {filteredExpenses.length > 0 ? (
                 filteredExpenses.map((expense) => (
-                  <tr key={expense.id} className="group">
+                  <tr key={expense.id} className={cn("group", expense.status === 'VOIDED' && "opacity-40 grayscale italic select-none")}>
                     <td className="font-mono text-slate-800 dark:text-slate-400 text-[10px]">
                       {new Date(expense.date).toLocaleDateString()}
                     </td>
                     <td>
-                      <span className="px-2 py-0.5 bg-brand-steel/30 border border-brand-steel text-[9px] font-display text-[var(--text-main)] opacity-70">
+                      <span className={cn("px-2 py-0.5 bg-brand-steel/30 border border-brand-steel text-[9px] font-display text-[var(--text-main)] opacity-70", expense.status === 'VOIDED' && "line-through")}>
                         {expense.category.toUpperCase()}
                       </span>
                     </td>
-                    <td className="text-[var(--text-main)] opacity-90 text-[11px]">
-                      {expense.description}
+                    <td className={cn("text-[var(--text-main)] opacity-90 text-[11px]", expense.status === 'VOIDED' && "line-through")}>
+                      {expense.description} {expense.status === 'VOIDED' && <span className="text-[8px] bg-danger text-white px-1 ml-2 not-italic inline-block">VOIDED</span>}
                     </td>
                     <td className="font-mono text-[10px] text-slate-900 dark:text-slate-500">
                       {expense.authorizedBy || "SYS_ADMIN"}
                     </td>
-                    <td className="font-mono text-danger text-[11px]">
+                    <td className={cn("font-mono text-danger text-[11px]", expense.status === 'VOIDED' && "line-through")}>
                       -{formatCurrency(expense.amount)}
                     </td>
                     <td className="text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => setEditingExpense(expense)}
-                          className="p-1 text-slate-900 dark:text-slate-500 hover:text-brand-accent transition-colors"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setExpensePendingId(expense.id);
-                            setIsConfirmModalOpen(true);
-                          }}
-                          className="p-1 text-slate-900 dark:text-slate-500 hover:text-danger transition-colors"
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        {expense.status !== 'VOIDED' && (
+                          <>
+                            <button
+                              onClick={() => setEditingExpense(expense)}
+                              className="p-1 text-slate-900 dark:text-slate-500 hover:text-brand-accent transition-colors"
+                            >
+                              <Edit2 size={14} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setExpensePendingId(expense.id);
+                                setIsConfirmModalOpen(true);
+                              }}
+                              className="p-1 text-slate-900 dark:text-slate-500 hover:text-danger transition-colors"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -607,26 +613,26 @@ export default function Expenses() {
             setExpensePendingId(null);
           }
         }}
-        title="AUTHORIZED_EXPENSE_PURGE"
+        title="LEDGER_VOID_REQUISITION"
         maxWidth="max-w-md"
       >
         <div className="space-y-6">
           <div className="p-4 bg-danger/5 border border-danger/20 flex flex-col items-center text-center space-y-4">
             <div className="w-12 h-12 bg-danger/10 rounded-full flex items-center justify-center text-danger">
-              <TrendingDown size={24} />
+              <AlertTriangle size={24} />
             </div>
             <div>
               <h3 className="text-xs font-display uppercase tracking-widest text-danger">
-                LEDGER_DELETION_REQUISITION
+                VOID_RECORD_AUTHORIZATION
               </h3>
               <p className="text-[10px] text-slate-900 dark:text-slate-500 mt-1 font-mono leading-relaxed">
-                PURGING_EXPENSE_RECORD:{" "}
+                VOID_LEDGER_ENTRY:{" "}
                 <span className="text-black font-bold">
                   #{expensePendingId?.slice(0, 8)}
                 </span>
                 <br />
-                THIS COMMAND WILL PERMANENTLY REMOVE THE ENTRY FROM THE LEDGER.
-                THIS ACTION IS LOGGED.
+                THIS RECORD WILL REMAIN IN THE SYSTEM BUT WILL BE VOIDED 
+                FOR CALCULATIONS. THIS ACTION IS AUDITED.
               </p>
             </div>
           </div>
@@ -645,9 +651,9 @@ export default function Expenses() {
                 }
               }}
               disabled={isSubmitting}
-              className="btn-industrial bg-danger text-white py-4 font-black uppercase tracking-widest text-[10px] shadow-[4px_4px_0px_0px_rgba(220,38,38,0.3)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all disabled:opacity-80 dark:opacity-50"
+              className="btn-industrial bg-danger text-white py-4 font-black uppercase tracking-widest text-[10px] shadow-[4px_4px_0px_0px_rgba(220,38,38,0.3)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
             >
-              {isSubmitting ? "PURGING..." : "AUTHORIZE_PURGE"}
+              {isSubmitting ? "AUTHORIZING_VOID..." : "CONFIRM_VOID_PROTOCOL"}
             </button>
             <button
               onClick={() => {

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider, gql } from '@apollo/client';
+import { ApolloClient, InMemoryCache, ApolloProvider, gql } from '@apollo/client';
+import { createUploadLink } from 'apollo-upload-client';
 import { Product, Sale, Customer, Supplier, Expense, User, Employee, Role, AttendanceRecord, Promotion, CashierShift, CartItem, PaymentMethod } from './types';
 import { GET_EMPLOYEES, GET_ATTENDANCE } from './gql/queries/hr';
 import {
@@ -9,6 +10,7 @@ import {
   INITIALIZE_HR_DB
 } from './gql/mutations/hr';
 import { LOGIN, GOOGLE_LOGIN, INITIALIZE_USER_DB } from './gql/mutations/auth';
+
 import { INITIALIZE_LOGS_DB } from './gql/mutations/logs';
 import { 
   GET_SETTINGS, 
@@ -16,6 +18,7 @@ import {
   INITIALIZE_SETTINGS_DB, 
   GET_ROLES, 
   ADD_ROLE, 
+  UPDATE_ROLE,
   DELETE_ROLE,
   GET_SYSTEM_TELEMETRY,
   BACKUP_DATABASE,
@@ -55,6 +58,16 @@ import { toast } from 'sonner';
 import { setContext } from '@apollo/client/link/context';
 import { onError } from '@apollo/client/link/error';
 
+const UPDATE_PROFILE_PICTURE = gql`
+  mutation UpdateProfilePicture($file: Upload!) {
+    updateProfilePicture(file: $file) {
+      id
+      username
+      profilePicture
+    }
+  }
+`;
+
 export const FORCE_LOGOUT_EVENT = 'khms_force_logout';
 
 
@@ -71,7 +84,7 @@ interface HardwareContextType {
   loading: boolean;
   isReady: boolean;
   login: (email: string, password: string) => Promise<string | undefined>;
-  loginWithGoogle: (token: string) => Promise<void>;
+  loginWithGoogle: (token: string) => Promise<string | undefined>;
   logout: () => void;
   addSupplier: (supplier: { name: string; contact?: string; phone?: string; email?: string; }) => Promise<void>;
   updateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;
@@ -100,7 +113,8 @@ interface HardwareContextType {
   addEmployee: (employee: Omit<Employee, 'id' | 'joinedDate'>) => Promise<void>;
   updateEmployee: (id: string, updates: Partial<Employee>) => Promise<void>;
   refreshEmployees: (silent?: boolean) => Promise<void>;
-  addRole: (role: { name: string; description?: string }) => Promise<void>;
+  addRole: (role: { name: string; description?: string; authorizedModules?: string[] }) => Promise<void>;
+  updateRole: (id: string, updates: Partial<Role>) => Promise<void>;
   deleteRole: (id: string) => Promise<void>;
   recordAttendance: (record: Omit<AttendanceRecord, 'id' | 'date' | 'checkIn'>) => Promise<void>;
   initializeHR: () => Promise<void>;
@@ -138,15 +152,10 @@ interface HardwareContextType {
   backupDatabase: () => Promise<any>;
   testNotifications: (email: string) => Promise<void>;
   isSalesLoading: boolean;
-  cart: CartItem[];
-  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
-  posDiscount: number;
-  setPosDiscount: React.Dispatch<React.SetStateAction<number>>;
-  selectedCustomerId: string;
-  setSelectedCustomerId: React.Dispatch<React.SetStateAction<string>>;
-  paymentMethod: PaymentMethod;
-  setPaymentMethod: React.Dispatch<React.SetStateAction<PaymentMethod>>;
   withLoading: (displayStatus: string | undefined, fn: () => Promise<void>, showToast?: boolean) => Promise<void>;
+  updateProfilePicture: (file: File) => Promise<void>;
+  playSound: (sound: 'cash' | 'select') => void;
+  initAudio: () => void;
 }
 
 
@@ -173,18 +182,22 @@ const getApiBaseUrl = () => {
 
 export const API_BASE_URL = getApiBaseUrl();
 
-const httpLink = createHttpLink({
+const uploadLink = createUploadLink({
   uri: `${API_BASE_URL}/graphql`,
+  headers: {
+    "Apollo-Require-Preflight": "true",
+  },
 });
 
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('khms_token');
+  const token = localStorage.getItem('token');
   return {
     headers: {
       ...headers,
       authorization: token ? `Bearer ${token}` : "",
+      "Apollo-Require-Preflight": "true"
     }
-  }
+  };
 });
 
 const errorLink = onError(({ graphQLErrors, networkError }) => {
@@ -208,13 +221,13 @@ const errorLink = onError(({ graphQLErrors, networkError }) => {
 });
 
 
-const client = new ApolloClient({
-  link: errorLink.concat(authLink.concat(httpLink)),
-  cache: new InMemoryCache(),
-});
 
+export const HardwareProvider = ({ children }: { children: React.ReactNode }) => {
+  const client = useMemo(() => new ApolloClient({
+    link: errorLink.concat(authLink.concat(uploadLink)),
+    cache: new InMemoryCache(),
+  }), []);
 
-export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Persistence for non-HR modules
   const [products, setProducts] = useState<Product[]>([]);
   const [promotions, setPromotions] = useState<Promotion[]>([]);
@@ -231,15 +244,11 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [classes, setClasses] = useState<any[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('khms_user');
-    return saved ? JSON.parse(saved) : null;
-  });
+  const saved = localStorage.getItem('user');
+  return saved ? JSON.parse(saved) : null;
+});
 
-  // Global POS Terminal Session Persistence
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [posDiscount, setPosDiscount] = useState(0);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+
 
   // Connectivity & Server Heartbeat Monitoring
   const [isOffline, setIsOffline] = useState(!window.navigator.onLine);
@@ -252,7 +261,10 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
     const handleSyncStatus = (isNowOffline: boolean, reason: 'network' | 'server') => {
       if (isNowOffline) {
-        setIsOffline(true);
+        setIsOffline(prev => {
+          if (prev === true) return prev;
+          return true;
+        });
         if (!offlineToastId.current) {
           const message = reason === 'network' 
             ? 'Network Paused: Please check your internet connection.' 
@@ -265,7 +277,10 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       } else {
         // Only restore if BOTH network is up AND server is reachable
         if (window.navigator.onLine && !isServerDown.current) {
-          setIsOffline(false);
+          setIsOffline(prev => {
+            if (prev === false) return prev;
+            return false;
+          });
           consecutiveServerFailures = 0; // Reset counter on success
           if (offlineToastId.current) {
             toast.dismiss(offlineToastId.current);
@@ -327,8 +342,8 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   // We synchronize the tenantStatus from the registry hub on every mount
   useEffect(() => {
     const syncSession = async () => {
-      const token = localStorage.getItem('khms_token');
-      if (!token || !currentUser) return;
+      const token = localStorage.getItem('token');
+      if (!token) return;
 
       try {
         const { data } = await client.query({
@@ -338,6 +353,8 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
                 id 
                 username 
                 role 
+                authorizedModules
+                profilePicture
                 tenantStatus 
               } 
             }
@@ -378,7 +395,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loadingStatus, setLoadingStatus] = useState('');
 
   // Smart Debounced Loading Helper (Directly connected to Server throughput)
-  const withLoading = async (status: string | undefined, fn: () => Promise<void>, showToast = false) => {
+  const withLoading = useCallback(async (status: string | undefined, fn: () => Promise<void>, showToast = false) => {
     // Format status for display: "SAVING_SALE" -> "Saving Sale"
     const displayStatus = status
       ? status
@@ -424,9 +441,27 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setGlobalLoading(false);
       setLoadingStatus('');
     }
+  }, [isOffline]);
+  
+  const updateProfilePicture = async (file: File) => {
+    try {
+      await withLoading('Uplinking Identity Image...', async () => {
+        const { data } = await client.mutate({
+          mutation: UPDATE_PROFILE_PICTURE,
+          variables: { file }
+        });
+        if (data?.updateProfilePicture) {
+          setCurrentUser(prev => ({
+            ...prev!,
+            profilePicture: data.updateProfilePicture.profilePicture
+          }));
+          toast.success('Identity Image Updated');
+        }
+      }, true);
+    } catch (err: any) {
+      console.error('[updateProfilePicture] Uplink Failed:', err);
+    }
   };
-
-
 
   const fetchEmployees = useCallback(async () => {
     try {
@@ -584,7 +619,8 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       return;
     }
 
-    const isHqCeo = currentUser?.role === 'hq-ceo';
+    const isHqCeo = currentUser?.role?.toLowerCase() === 'hq-ceo';
+    const isHqAdmin = currentUser?.role?.toLowerCase() === 'admin';
 
     withLoading('SYSTEM_HYDRATION_IN_PROGRESS...', async () => {
       try {
@@ -620,6 +656,20 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           });
           if (data?.activeShift) setActiveShift(data.activeShift);
         }
+
+        // Re-verify currentUser permissions from data.me if available
+        if (currentUser) {
+          const { data: meData } = await client.query({
+            query: gql`query RefreshMe { me { id username role authorizedModules profilePicture tenantStatus } }`,
+            fetchPolicy: 'network-only'
+          });
+          if (meData?.me) {
+            setCurrentUser(prev => ({
+              ...prev!,
+              ...meData.me
+            }));
+          }
+        }
         
         setIsReady(true);
       } catch (err) {
@@ -627,15 +677,15 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setIsReady(true); // Don't block UI if some fetches fail
       }
     });
-  }, [currentUser, fetchEmployees, fetchAttendance, fetchSettings, fetchRoles, fetchSuppliers, fetchProducts, fetchCustomers, fetchSales, fetchExpenses, fetchReturns, fetchPromotions]);
+  }, [currentUser?.id, fetchEmployees, fetchAttendance, fetchSettings, fetchRoles, fetchSuppliers, fetchProducts, fetchCustomers, fetchSales, fetchExpenses, fetchReturns, fetchPromotions]);
 
   useEffect(() => {
-    localStorage.setItem('khms_expenses', JSON.stringify(expenses)); // Keep expenses for now as they are lighter
-    localStorage.setItem('khms_promotions', JSON.stringify(promotions));
+    localStorage.setItem('expenses', JSON.stringify(expenses));
+    localStorage.setItem('promotions', JSON.stringify(promotions));
     if (currentUser) {
-      localStorage.setItem('khms_user', JSON.stringify(currentUser));
+      localStorage.setItem('user', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('khms_user');
+      localStorage.removeItem('user');
     }
   }, [expenses, currentUser, promotions]);
 
@@ -658,7 +708,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
       if (data?.login) {
         const token = data.login;
-        localStorage.setItem('khms_token', token);
+        localStorage.setItem('token', token);
 
         // HSM v2.4: Purge cache before session context switch
         await client.clearStore();
@@ -670,14 +720,16 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           username: decoded.username,
           name: decoded.name,
           role: decoded.role as any,
+          authorizedModules: decoded.authorizedModules || [],
           tenantStatus: decoded.tenantStatus,
         });
 
         // Refresh client headers
-        client.setLink(createHttpLink({
+        client.setLink(createUploadLink({
           uri: `${API_BASE_URL}/graphql`,
           headers: {
-            authorization: `Bearer ${token}`
+            authorization: `Bearer ${token}`,
+            "Apollo-Require-Preflight": "true"
           }
         }));
 
@@ -743,7 +795,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         
         // Purge Apollo Cache and reset link to ensure security partitioning
         client.clearStore().catch(console.error);
-        client.setLink(httpLink); 
+        client.setLink(uploadLink); 
     } catch (error) {
         console.error('[Scorched Earth] Logout cleanup error:', error);
         // We still consider the user logged out since tokens are gone
@@ -956,7 +1008,7 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       await withLoading('SAVING_EXPENSE', async () => {
         await client.mutate({
           mutation: ADD_EXPENSE,
-          variables: { ...e }
+          variables: { ...e, status: 'ACTIVE' }
         });
         await fetchExpenses();
       }, true);
@@ -982,14 +1034,24 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const deleteExpense = async (id: string) => {
     try {
-      await client.mutate({
-        mutation: DELETE_EXPENSE,
-        variables: { id }
-      });
-      await fetchExpenses();
-      toast.success('Expense deleted');
+      // HSM v2.4 Security Re-routing: Deletion is prohibited. We use Void protocol instead.
+      await withLoading('VOID_EXPENSE_LEDGER_REQUISITION', async () => {
+        await client.mutate({
+          mutation: UPDATE_EXPENSE,
+          variables: { id, status: 'VOIDED' }
+        });
+        await fetchExpenses();
+        toast.success('EXPENSE_RECORD_VOIDED_AND_PRESERVED_IN_AUDIT');
+        
+        addSystemLog({
+          action: "EXPENSE_VOIDED",
+          target: `EXPENSE_ID: ${id}`,
+          oldValue: "ACTIVE",
+          newValue: "VOIDED"
+        });
+      }, true);
     } catch (err: any) {
-      toast.error(`Failed to delete expense: ${err.message}`);
+      toast.error(`VOID_PROTOCOL_REJECTED: ${err.message}`);
     }
   };
 
@@ -1138,16 +1200,33 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   }, []);
 
-  const addRole = async (role: { name: string; description?: string }) => {
+  const addRole = async (role: { name: string; description?: string; authorizedModules?: string[] }) => {
     try {
-      await client.mutate({
-        mutation: ADD_ROLE,
-        variables: { ...role }
-      });
-      await fetchRoles();
-      toast.success('Role added successfully');
+      await withLoading('REGISTERING_ROLE', async () => {
+        await client.mutate({
+          mutation: ADD_ROLE,
+          variables: { ...role }
+        });
+        await fetchRoles();
+        toast.success('Role added successfully');
+      }, true);
     } catch (err: any) {
-      toast.error(`Failed to add role: ${err.message}`);
+      console.error('[addRole] Execution Failed:', err);
+    }
+  };
+
+  const updateRole = async (id: string, updates: Partial<Role>) => {
+    try {
+      await withLoading('UPDATING_ROLE_PERMISSIONS', async () => {
+        await client.mutate({
+          mutation: UPDATE_ROLE,
+          variables: { id, ...updates }
+        });
+        await fetchRoles();
+        toast.success('Role permissions updated');
+      }, true);
+    } catch (err: any) {
+      console.error('[updateRole] Execution Failed:', err);
     }
   };
 
@@ -1383,27 +1462,27 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const fetchAuditLogs = async (startDate?: string, endDate?: string) => {
+  const fetchAuditLogs = useCallback(async (startDate?: string, endDate?: string) => {
     const { data } = await client.query({ query: GET_AUDIT_LOGS, variables: { startDate, endDate }, fetchPolicy: 'network-only' });
     return data?.auditLogs || [];
-  };
+  }, []);
 
-  const fetchSaleReturns = async (startDate?: string, endDate?: string) => {
+  const fetchSaleReturns = useCallback(async (startDate?: string, endDate?: string) => {
     const { data } = await client.query({ query: GET_SALE_RETURNS, variables: { startDate, endDate }, fetchPolicy: 'network-only' });
     return data?.saleReturns || [];
-  };
+  }, []);
 
-  const fetchCashierShifts = async (startDate?: string, endDate?: string) => {
+  const fetchCashierShifts = useCallback(async (startDate?: string, endDate?: string) => {
     const { data } = await client.query({ query: GET_CASHIER_SHIFTS, variables: { startDate, endDate }, fetchPolicy: 'network-only' });
     return data?.cashierShifts || [];
-  };
+  }, []);
 
-  const getActiveShift = async (cashierId: string) => {
+  const getActiveShift = useCallback(async (cashierId: string) => {
     const { data } = await client.query({ query: GET_ACTIVE_SHIFT, variables: { cashierId }, fetchPolicy: 'network-only' });
     return data?.activeShift;
-  };
+  }, []);
 
-  const fetchProfitReport = async (start: string, end: string) => {
+  const fetchProfitReport = useCallback(async (start: string, end: string) => {
     try {
       const { data } = await client.query({
         query: GET_PROFIT_REPORT,
@@ -1415,9 +1494,9 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('fetchProfitReport error:', err);
       return [];
     }
-  };
+  }, []);
 
-  const searchSaleByInvoice = async (invoiceId: string): Promise<Sale | null> => {
+  const searchSaleByInvoice = useCallback(async (invoiceId: string): Promise<Sale | null> => {
     try {
       // Use existing GET_SALES with search parameter to find the specific sale
       const { data } = await client.query({
@@ -1432,8 +1511,101 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       console.error('searchSaleByInvoice error:', err);
       return null;
     }
-  };
+  }, []);
 
+  const refreshInventory = useCallback(async (silent = true) => {
+    try {
+      await withLoading(silent ? undefined : 'SYNCING_INVENTORY', async () => {
+        await fetchProducts();
+      }, false);
+      if (!silent) toast.info('Inventory synchronized');
+    } catch (err: any) {
+      const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
+      toast.error(`Sync Failed: ${friendlyMsg}`);
+    }
+  }, [withLoading, fetchProducts]);
+
+  const refreshSuppliers = useCallback(async (silent = true) => {
+    try {
+      await withLoading(silent ? undefined : 'SYNCING_SUPPLIERS', async () => {
+        await fetchSuppliers();
+      }, false);
+      if (!silent) toast.info('Suppliers synchronized');
+    } catch (err: any) {
+      const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
+      toast.error(`Sync Failed: ${friendlyMsg}`);
+    }
+  }, [withLoading, fetchSuppliers]);
+
+  const refreshSales = useCallback(async (startDate?: string, endDate?: string, search?: string, silent = true) => {
+    try {
+      const start = startDate || getPastLocalDateString(6);
+      const end = endDate || getLocalDateString();
+      await withLoading(silent ? undefined : 'SYNCING_SALES_LEDGER', async () => {
+        await fetchSales(start, end, search);
+      }, false);
+      if (!silent) toast.info('Sales ledger synchronized');
+    } catch (err: any) {
+      const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
+      toast.error(`Sync Failed: ${friendlyMsg}`);
+    }
+  }, [withLoading, fetchSales]);
+
+  const refreshExpenses = useCallback(async (startDate?: string, endDate?: string, search?: string, silent = true) => {
+    try {
+      const start = startDate || getPastLocalDateString(6);
+      const end = endDate || getLocalDateString();
+      await withLoading(silent ? undefined : 'SYNCING_EXPENSE_LEDGER', async () => {
+        await fetchExpenses(start, end, search);
+      }, false);
+      if (!silent) toast.info('Expense ledger synchronized');
+    } catch (err: any) {
+      const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
+      toast.error(`Sync Failed: ${friendlyMsg}`);
+    }
+  }, [withLoading, fetchExpenses]);
+
+  const refreshReturns = useCallback(async (startDate?: string, endDate?: string, silent = true) => {
+    try {
+      const start = startDate || getPastLocalDateString(6);
+      const end = endDate || getLocalDateString();
+      await withLoading(silent ? undefined : 'SYNCING_RETURNS_LEDGER', async () => {
+        await fetchReturns(start, end);
+      }, false);
+      if (!silent) toast.info('Returns ledger synchronized');
+    } catch (err: any) {
+      const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
+      toast.error(`Sync Failed: ${friendlyMsg}`);
+    }
+  }, [withLoading, fetchReturns]);
+
+
+  const initAudio = useCallback(() => {
+    // Prime the audio context by playing a silent buffer on first user interaction
+    try {
+      const audio = new Audio('/sounds/select.mp3');
+      audio.volume = 0;
+      audio.play().then(() => {
+        console.log('[Audio] Sensory engine primed and authorized by browser.');
+      }).catch(() => {
+        // Expected if called without gesture, though we intend to call on gesture
+      });
+    } catch (err) {
+      console.warn('[Audio] Sensory priming deferred.');
+    }
+  }, []);
+
+  const playSound = useCallback((sound: 'cash' | 'select') => {
+    try {
+      const audio = new Audio(`/sounds/${sound}.mp3`);
+      console.log(`[Audio] Tactical trigger: ${sound} -> /sounds/${sound}.mp3`);
+      audio.play().catch(err => {
+        console.warn(`[Audio] Tactical playback blocked: ${err.message}. Institutional priming may be required.`);
+      });
+    } catch (err) {
+      console.error('[Audio] Institutional sound engine failure:', err);
+    }
+  }, []);
 
   const contextValue = useMemo(() => ({
     products, sales, customers, suppliers, expenses, employees, attendance, roles,
@@ -1443,76 +1615,20 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     updateCustomer, deleteCustomer, recordPayment,
     updateCustomerBalance, addExpense, deleteExpense,
     addEmployee, updateEmployee, refreshEmployees,
-    addRole, deleteRole,
+    addRole, updateRole, deleteRole,
     recordAttendance, initializeHR, initializeUserDB, initializeLogsDB,
     settings, updateSetting, initializeSettingsDB,
     addSupplier, updateSupplier, deleteSupplier, initializeInventoryDB,
     getInventoryTransactions, getCustomerPayments, getDailyDebtRecovered,
-    refreshInventory: async (silent = true) => {
-      try {
-        await withLoading(silent ? undefined : 'SYNCING_INVENTORY', async () => {
-          await fetchProducts();
-        }, false);
-        if (!silent) toast.info('Inventory synchronized');
-      } catch (err: any) {
-        const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
-        toast.error(`Sync Failed: ${friendlyMsg}`);
-      }
-    },
-    refreshSuppliers: async (silent = true) => {
-      try {
-        await withLoading(silent ? undefined : 'SYNCING_SUPPLIERS', async () => {
-          await fetchSuppliers();
-        }, false);
-        if (!silent) toast.info('Suppliers synchronized');
-      } catch (err: any) {
-        const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
-        toast.error(`Sync Failed: ${friendlyMsg}`);
-      }
-    },
-    refreshSales: async (startDate?: string, endDate?: string, search?: string, silent = true) => {
-      try {
-        const start = startDate || getPastLocalDateString(6);
-        const end = endDate || getLocalDateString();
-        await withLoading(silent ? undefined : 'SYNCING_SALES_LEDGER', async () => {
-          await fetchSales(start, end, search);
-        }, false);
-        if (!silent) toast.info('Sales ledger synchronized');
-      } catch (err: any) {
-        const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
-        toast.error(`Sync Failed: ${friendlyMsg}`);
-      }
-    },
-    refreshExpenses: async (startDate?: string, endDate?: string, search?: string, silent = true) => {
-      try {
-        const start = startDate || getPastLocalDateString(6);
-        const end = endDate || getLocalDateString();
-        await withLoading(silent ? undefined : 'SYNCING_EXPENSE_LEDGER', async () => {
-          await fetchExpenses(start, end, search);
-        }, false);
-        if (!silent) toast.info('Expense ledger synchronized');
-      } catch (err: any) {
-        const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
-        toast.error(`Sync Failed: ${friendlyMsg}`);
-      }
-    },
+    refreshInventory,
+    refreshSuppliers,
+    refreshSales,
+    refreshExpenses,
     updateExpense,
     addSystemLog,
     recordReturn,
     saleReturns,
-    refreshReturns: async (startDate?: string, endDate?: string, silent = true) => {
-      try {
-        const start = startDate || getPastLocalDateString(6);
-        const end = endDate || getLocalDateString();
-        await withLoading(silent ? undefined : 'SYNCING_RETURNS_LEDGER', async () => {
-          await fetchReturns(start, end);
-        }, false);
-        if (!silent) toast.info('Returns ledger synchronized');
-      } catch (err: any) {
-        const friendlyMsg = err.message === 'Failed to fetch' ? 'Server unreachable' : err.message;
-        toast.error(`Sync Failed: ${friendlyMsg}`);
-      }
-    },
+    refreshReturns,
     openShift,
     closeShift,
     fetchAuditLogs,
@@ -1537,40 +1653,29 @@ export const HardwareProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     backupDatabase,
     testNotifications,
     isSalesLoading,
-    cart,
-    setCart,
-    posDiscount,
-    setPosDiscount,
-    selectedCustomerId,
-    setSelectedCustomerId,
-    paymentMethod,
-    setPaymentMethod,
     withLoading,
+    updateProfilePicture,
+    playSound,
+    initAudio,
   }), [
     products, sales, customers, suppliers, expenses, employees, attendance, roles,
-    currentUser, globalLoading, empLoading, isReady, isOffline, login, loginWithGoogle, logout, addProduct, updateProduct, 
-    retireProduct, adjustStock, addSale, addCustomer, updateCustomer, deleteCustomer, 
-    recordPayment, updateCustomerBalance, addExpense, deleteExpense, addEmployee,
-    customerPayments, refreshAllCustomerPayments,
-    updateEmployee, refreshEmployees, addRole, deleteRole, recordAttendance, 
-    initializeHR, initializeUserDB, initializeLogsDB, settings, updateSetting, 
-    initializeSettingsDB, addSupplier, updateSupplier, deleteSupplier, 
-    initializeInventoryDB, getInventoryTransactions, getCustomerPayments, 
-    getDailyDebtRecovered, withLoading, fetchProducts, fetchSuppliers, 
-    fetchSales, fetchExpenses, updateExpense, addSystemLog, recordReturn, saleReturns, 
-    fetchReturns, openShift, closeShift, fetchAuditLogs, fetchSaleReturns, 
-    fetchCashierShifts, getActiveShift, activeShift, loadingStatus, fetchProfitReport,
-    searchSaleByInvoice, promotions, addPromotion, updatePromotion, deletePromotion, togglePromotion, fetchPromotions,
-    getShiftExpected,
-    deleteCustomerPayment,
-    getSystemTelemetry,
-    backupDatabase,
-    testNotifications,
-    isSalesLoading,
-    cart,
-    posDiscount,
-    selectedCustomerId,
-    paymentMethod
+    currentUser, globalLoading, empLoading, isReady, isOffline, 
+    login, loginWithGoogle, logout, addProduct, updateProduct, retireProduct, adjustStock, addSale, addCustomer,
+    updateCustomer, deleteCustomer, recordPayment, updateCustomerBalance, addExpense, deleteExpense,
+    addEmployee, updateEmployee, refreshEmployees, addRole, updateRole, deleteRole, recordAttendance, 
+    initializeHR, initializeUserDB, initializeLogsDB, settings, updateSetting, initializeSettingsDB,
+    addSupplier, updateSupplier, deleteSupplier, initializeInventoryDB,
+    getInventoryTransactions, getCustomerPayments, getDailyDebtRecovered,
+    refreshInventory, refreshSuppliers, refreshSales, refreshExpenses, updateExpense, addSystemLog,
+    recordReturn, saleReturns, refreshReturns,
+    openShift, closeShift, fetchAuditLogs, fetchSaleReturns, fetchCashierShifts, getActiveShift,
+    activeShift, loadingStatus, promotions, addPromotion, updatePromotion, deletePromotion,
+    togglePromotion, fetchPromotions, fetchProfitReport, getShiftExpected, searchSaleByInvoice,
+    customerPayments, refreshAllCustomerPayments, deleteCustomerPayment,
+    getSystemTelemetry, backupDatabase, testNotifications, isSalesLoading, withLoading,
+    updateProfilePicture,
+    playSound,
+    initAudio
   ]);
 
   return (

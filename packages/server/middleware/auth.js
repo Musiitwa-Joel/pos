@@ -99,12 +99,29 @@ const authenticateUser = async ({ req }) => {
       const targetPool = getTenantPool(dbName);
       
       const [rows] = await targetPool.execute(
-        `SELECT * FROM users WHERE id = ? LIMIT 1`,
+        `SELECT u.*, r.authorized_modules as role_modules 
+         FROM users u 
+         LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
+         WHERE u.id = ? LIMIT 1`,
         [decoded.id]
       );
       const dbUser = rows && rows[0] ? rows[0] : null;
 
       if (dbUser) {
+        // [RBAC HSM v1.1] Module Permission Merging
+        let modules = [];
+        try {
+          const roleModules = dbUser.role_modules ? JSON.parse(dbUser.role_modules) : [];
+          const userModules = dbUser.authorized_modules ? JSON.parse(dbUser.authorized_modules) : [];
+          modules = [...new Set([...roleModules, ...userModules])];
+          
+          // GOD-MODE: Admins automatically bypass all module restrictions
+          if (dbUser.role?.toLowerCase() === 'admin' || dbUser.role?.toLowerCase() === 'hq-ceo') {
+            modules = ['dashboard', 'pos', 'inventory', 'credit', 'hr', 'sales', 'reports', 'suppliers', 'expenses', 'returns', 'settings'];
+          }
+        } catch (e) {
+          console.error("Auth Middleware: Failed to parse module permissions", e);
+        }
         // provide a 'biodata' convenience object used by resolvers/clients
         const buildStaffName = (u) => {
           const safe = (v) =>
@@ -158,7 +175,7 @@ const authenticateUser = async ({ req }) => {
           return null; // avoid email fallback here
         };
         const name = computeName(decoded, biodata);
-        req.user = { ...decoded, ...dbUser, biodata, name, dbName, tenantStatus };
+        req.user = { ...decoded, ...dbUser, biodata, name, dbName, tenantStatus, authorizedModules: modules };
       } else {
         req.user = { ...decoded, dbName, tenantStatus };
       }

@@ -6,6 +6,18 @@ import { v7 as uuidv7 } from "uuid";
 
 console.log("[DEBUG] HR_RESOLVERS_LOADED_V4_UUIDV7");
 
+const recordAudit = async (db, userId, action, target, oldValue = null, newValue = null) => {
+  try {
+    const auditId = uuidv7();
+    await db.query(
+      "INSERT INTO audit_logs (id, user_id, action, target, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)",
+      [auditId, userId || 'SYSTEM', action, target, oldValue, newValue]
+    );
+  } catch (err) {
+    console.error(`[recordAudit] Forensic Failure: ${err.message}`);
+  }
+};
+
 const HR_SCHEMA_SQL = [
     `CREATE TABLE IF NOT EXISTS employees (
     id VARCHAR(50) PRIMARY KEY,
@@ -17,7 +29,9 @@ const HR_SCHEMA_SQL = [
     status ENUM('active', 'on_leave', 'terminated') DEFAULT 'active',
     joined_date DATE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_role (role),
+    INDEX idx_status (status)
   ) ENGINE=MyISAM`,
     `CREATE TABLE IF NOT EXISTS attendance (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -26,7 +40,9 @@ const HR_SCHEMA_SQL = [
     check_in DATETIME NOT NULL,
     check_out DATETIME,
     status ENUM('present', 'late', 'absent') DEFAULT 'present',
-    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+    INDEX idx_emp_date (employee_id, date),
+    INDEX idx_date (date)
   ) ENGINE=MyISAM`,
     `CREATE TABLE IF NOT EXISTS payroll_records (
     id INT AUTO_INCREMENT PRIMARY KEY,
@@ -46,7 +62,7 @@ const USER_SCHEMA_SQL = [
     id VARCHAR(50) PRIMARY KEY,
     username VARCHAR(255) NOT NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
-    role ENUM('admin', 'manager', 'cashier', 'staff') DEFAULT 'staff',
+    role VARCHAR(100) DEFAULT 'PENDING_ASSIGNMENT',
     employee_id VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -86,6 +102,22 @@ const SchemaGuard = async (db, tableName, columns) => {
         } catch (err) {
             console.error(`[Schema Guard] Failed to inject column '${field.name}':`, err.message);
         }
+    }
+};
+
+/**
+ * Forensic Index Guard - HSM v3.0
+ * Ensures high-performance lookups on historical data.
+ */
+const IndexGuard = async (db, tableName, indexName, columnDefinition) => {
+    try {
+        const [rows] = await db.query(`SHOW INDEX FROM ${tableName} WHERE Key_name = ?`, [indexName]);
+        if (rows.length === 0) {
+            console.log(`[Index Guard] Injecting forensic index '${indexName}' into '${tableName}'...`);
+            await db.query(`ALTER TABLE ${tableName} ADD INDEX ${indexName} (${columnDefinition})`);
+        }
+    } catch (err) {
+        console.error(`[Index Guard] Failed to verify/inject index '${indexName}':`, err.message);
     }
 };
 
@@ -161,6 +193,12 @@ export default {
                 { name: 'updated_at', type: 'TIMESTAMP', extra: 'DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP' }
             ]);
 
+            // 🛡️ [HSM v3.0] Index Hardening (Existing Tenants)
+            await IndexGuard(db, 'employees', 'idx_status', 'status');
+            await IndexGuard(db, 'employees', 'idx_role', 'role');
+            await IndexGuard(db, 'attendance', 'idx_emp_date', 'employee_id, date');
+            await IndexGuard(db, 'attendance', 'idx_date', 'date');
+
             const connection = await db.getConnection();
             try {
                 await connection.beginTransaction();
@@ -180,16 +218,17 @@ export default {
                     [employeeId, name, role, phone, email, salary, status || 'active', joinedDate]
                 );
 
-                // 3. Automated Onboarding: Create System User
-                const tempPassword = crypto.randomBytes(4).toString('hex'); // 8 characters
+                // 3. Automated Onboarding: Create System User with Synchronized Role
+                const tempPassword = crypto.randomBytes(4).toString('hex');
                 const salt = await bcrypt.genSalt(10);
                 const passwordHash = await bcrypt.hash(tempPassword, salt);
                 const username = email.toLowerCase();
                 const userId = uuidv7();
+                const standardizedRole = role.toUpperCase();
 
                 await connection.query(
                     "INSERT INTO users (id, username, password_hash, role, employee_id) VALUES (?, ?, ?, ?, ?)",
-                    [userId, username, passwordHash, role === 'Admin' ? 'admin' : 'staff', employeeId]
+                    [userId, username, passwordHash, standardizedRole, employeeId]
                 );
 
                 // 📡 [TredPOS v2.4] Universal Registry Onboarding
@@ -267,6 +306,9 @@ export default {
                     });
                 }
 
+                // 🛡️ Forensic Audit: Personnel Onboarding
+                recordAudit(db, user?.id, 'PERSONNEL_ONBOARDED', name, null, `Role: ${role} | Salary: ${salary}`);
+
                 return {
                     id: employeeId, name, role, phone, email, salary, status: status || 'active', joinedDate
                 };
@@ -278,14 +320,38 @@ export default {
                 connection.release();
             }
         },
-        updateEmployee: async (_, args, { db }) => {
+        updateEmployee: async (_, args, { db, user }) => {
             const { id, ...updates } = args;
             const fields = Object.keys(updates);
             const values = Object.values(updates);
             if (fields.length === 0) throw new Error("No fields provided for update");
 
+            const [oldRows] = await db.query("SELECT * FROM employees WHERE id = ?", [id]);
+            const oldEmp = oldRows[0];
+
             const setClause = fields.map(f => `${f.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)} = ?`).join(", ");
             await db.query(`UPDATE employees SET ${setClause} WHERE id = ?`, [...values, id]);
+
+            // 🛡️ Identity Sync Hook: Synchronize Role Changes to the Security Registry
+            if (updates.role) {
+                const standardizedRole = updates.role.toUpperCase();
+                console.log(`[Identity Bridge] Synchronizing role change for employee ${id} to security registry: ${standardizedRole}`);
+                await db.query("UPDATE users SET role = ? WHERE employee_id = ?", [standardizedRole, id]);
+            }
+
+            // 🛡️ Forensic Audit: Personnel Update
+            if (updates.salary !== undefined) {
+               recordAudit(
+                   db, 
+                   user?.id, 
+                   'SALARY_ADJUSTMENT', 
+                   oldEmp.name, 
+                   `UGX ${parseFloat(oldEmp.salary).toLocaleString()}`, 
+                   `UGX ${parseFloat(updates.salary).toLocaleString()}`
+               );
+            } else {
+               recordAudit(db, user?.id, 'PERSONNEL_DATA_CHANGE', oldEmp.name, 'Config updated', null);
+            }
 
             const [rows] = await db.query("SELECT * FROM employees WHERE id = ?", [id]);
             return {

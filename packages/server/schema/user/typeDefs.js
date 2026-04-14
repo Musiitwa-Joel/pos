@@ -6,6 +6,8 @@ export default `
     employeeId: ID
     tenantStatus: String
     isActive: Boolean
+    authorizedModules: [String]
+    profilePicture: String
     createdAt: String
     updatedAt: String
   }
@@ -27,5 +29,6 @@ export default `
     googleDecommissionRegistry(tenantId: String!): Boolean
     googleFinalizeProvisioning(tenantId: String!, password: String!): Boolean
     initializeUserDatabase: String
+    updateProfilePicture(file: Upload!): User!
   }
 `;

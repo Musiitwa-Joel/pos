@@ -13,8 +13,10 @@ import {
   Receipt,
   Loader2,
 } from "lucide-react";
+// @ts-ignore
 import { motion, AnimatePresence } from "motion/react";
 import { useHardware } from "../HardwareContext";
+import { usePOS } from "../POSContext";
 import { formatCurrency, cn } from "../lib/utils";
 import type { Product, CartItem, PaymentMethod } from "../types";
 // @ts-ignore
@@ -39,6 +41,13 @@ export default function POS({ onExit }: { onExit?: () => void }) {
     getShiftExpected,
     promotions,
     isOffline,
+    activeShift,
+    isReady,
+    playSound,
+    initAudio,
+  } = useHardware();
+
+  const {
     cart,
     setCart,
     paymentMethod,
@@ -47,8 +56,8 @@ export default function POS({ onExit }: { onExit?: () => void }) {
     setSelectedCustomerId,
     posDiscount: discount,
     setPosDiscount: setDiscount,
-  } = useHardware();
-  const [activeShift, setActiveShift] = useState<any>(null);
+    clearPOS,
+  } = usePOS();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -64,6 +73,7 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   const [isCartMobileOpen, setIsCartMobileOpen] = useState(false);
   const [shiftStats, setShiftStats] = useState<any>(null);
   const [isFetchingStats, setIsFetchingStats] = useState(false);
+  const [vetoedPromoIds, setVetoedPromoIds] = useState<string[]>([]);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -135,21 +145,16 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   ]);
 
   useEffect(() => {
-    const checkShift = async () => {
-      if (!currentUser?.id) return;
-      const shift = await getActiveShift(currentUser.id);
-      setActiveShift(shift);
-      setIsShiftChecking(false);
-      if (!shift) setShowOpeningModal(true);
-    };
-    checkShift();
-  }, [currentUser?.id]);
+    if (!isReady) return;
+    if (!currentUser?.id) return;
+    setIsShiftChecking(false);
+    setShowOpeningModal(!activeShift);
+  }, [currentUser?.id, activeShift, isReady]);
 
   const handleOpenShift = async () => {
+    initAudio(); // Priming the institutional sensory engine upon terminal activation
     const cash = parseFloat(openingCashInput) || 0;
     await openShift(cash);
-    const shift = await getActiveShift(currentUser?.id || "");
-    setActiveShift(shift);
     setShowOpeningModal(false);
   };
 
@@ -169,7 +174,6 @@ export default function POS({ onExit }: { onExit?: () => void }) {
     if (!activeShift?.id) return;
     const cash = parseFloat(closingCashInput) || 0;
     await closeShift(activeShift.id, cash);
-    setActiveShift(null);
     setShowClosingModal(false);
     setShowOpeningModal(true);
     setClosingCashInput("");
@@ -198,6 +202,7 @@ export default function POS({ onExit }: { onExit?: () => void }) {
       }
       return [...prev, { ...product, quantity: 1, discount: 0 }];
     });
+    playSound('select');
     setSearchQuery("");
   };
 
@@ -235,7 +240,7 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   }, [promotions]);
 
   const calculatePromoDiscount = () => {
-    const livePromos = activePromos;
+    const livePromos = activePromos.filter(p => !vetoedPromoIds.includes(p.id));
     if (livePromos.length === 0) return 0;
 
     return cart.reduce((totalAcc, item) => {
@@ -272,15 +277,15 @@ export default function POS({ onExit }: { onExit?: () => void }) {
 
   const promoDiscount = useMemo(
     () => calculatePromoDiscount(),
-    [activePromos, cart],
+    [activePromos, cart, vetoedPromoIds],
   );
 
   const total = Math.max(0, subtotal - promoDiscount - discount);
 
-  const isProcessingRef = React.useRef(false);
+  const isProcessingRef = useRef(false);
 
   const handleCompleteSale = async () => {
-    if (cart.length === 0 || isProcessingRef.current || isSuccess) return;
+    if (cart.length === 0 || isProcessingRef.current || isSuccess || isOffline) return;
     if (paymentMethod === "credit" && !selectedCustomerId) {
       alert("Please select a customer for credit sale");
       return;
@@ -318,6 +323,7 @@ export default function POS({ onExit }: { onExit?: () => void }) {
       });
 
       if (result) {
+        playSound('cash');
         setLastSale(result);
         setIsSuccess(true);
 
@@ -330,10 +336,8 @@ export default function POS({ onExit }: { onExit?: () => void }) {
 
         setTimeout(() => {
           setIsSuccess(false);
-          setCart([]);
-          setDiscount(0);
-          setSelectedCustomerId("");
-          setPaymentMethod("cash");
+          clearPOS();
+          setVetoedPromoIds([]);
           setLastSale(null);
         }, 5000);
       }
@@ -346,7 +350,9 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   };
 
   const handleReprint = () => {
-    (globalThis as any).print?.();
+    if (typeof window !== "undefined") {
+      window.print();
+    }
   };
 
   return (
@@ -356,7 +362,16 @@ export default function POS({ onExit }: { onExit?: () => void }) {
         onClose={() => setIsDiscountModalOpen(false)}
         subtotal={subtotal}
         currentDiscount={discount}
-        onApply={setDiscount}
+        onApply={(val, reason) => {
+          setDiscount(val);
+          addSystemLog({
+            action: "PRICE_OVERRIDE",
+            target: `CART_TOTAL: ${formatCurrency(subtotal)}`,
+            oldValue: formatCurrency(discount),
+            newValue: `${formatCurrency(val)} [REASON: ${reason.toUpperCase()}]`,
+          });
+          toast.success("PRICE_OVERRIDE_AUTHORIZED_AND_LOGGED");
+        }}
       />
 
       {/* Shift Opening Modal */}
@@ -826,30 +841,76 @@ export default function POS({ onExit }: { onExit?: () => void }) {
                   </div>
                   <div className="flex justify-between text-[10px] text-slate-900 dark:text-slate-500 font-mono tracking-tighter">
                     <div className="flex items-center gap-1">
-                      <span>SYSTEM_DISCOUNTS</span>
+                      <span>MANUAL_OVERRIDE</span>
                       <button
                         onClick={() => setIsDiscountModalOpen(true)}
                         className="p-1 hover:bg-brand-steel rounded text-brand-accent transition-colors"
                       >
                         <Plus size={10} />
                       </button>
+                      {discount > 0 && (
+                        <button
+                          onClick={() => {
+                            setDiscount(0);
+                            toast.info("MANUAL_OVERRIDE_CLEARED");
+                          }}
+                          className="p-1 hover:bg-danger/20 rounded text-danger transition-colors"
+                        >
+                          <X size={10} />
+                        </button>
+                      )}
                     </div>
                     <span className="text-danger">
-                      -{formatCurrency(discount)}
+                      {discount > 0 ? `-${formatCurrency(discount)}` : formatCurrency(0)}
                     </span>
                   </div>
 
-                  {promoDiscount > 0 && (
-                    <div className="flex justify-between items-start text-[10px] text-brand-accent font-mono animate-pulse tracking-tighter leading-tight">
-                      <div className="flex flex-col">
-                        <span className="font-black">ACTIVE_PROMOS:</span>
-                        {activePromos.map((p) => (
-                          <span key={p.id} className="text-[8px] opacity-70">
-                            - {p.name}
-                          </span>
-                        ))}
+                  {activePromos.length > 0 && (
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-brand-accent font-mono font-black tracking-tighter uppercase mb-1">
+                        SYSTEM_PROMOTIONS:
                       </div>
-                      <span>-{formatCurrency(promoDiscount)}</span>
+                      {activePromos.map((p) => {
+                        const isVetoed = vetoedPromoIds.includes(p.id);
+                        return (
+                          <div key={p.id} className={cn(
+                            "flex justify-between items-center text-[9px] font-mono tracking-tighter transition-all",
+                            isVetoed ? "opacity-30 line-through" : "text-brand-accent"
+                          )}>
+                            <div className="flex items-center gap-1">
+                              <span>- {p.name}</span>
+                              <button
+                                onClick={() => {
+                                  if (isVetoed) {
+                                    setVetoedPromoIds(prev => prev.filter(vid => vid !== p.id));
+                                  } else {
+                                    setVetoedPromoIds(prev => [...prev, p.id]);
+                                    addSystemLog({
+                                      action: "PROMO_VETO",
+                                      target: `PROMO: ${p.name.toUpperCase()}`,
+                                      oldValue: "ACTIVE",
+                                      newValue: "BYPASSED_MANUALLY"
+                                    });
+                                  }
+                                }}
+                                className="p-0.5 hover:bg-brand-steel rounded ml-1"
+                                title={isVetoed ? "Restore Promotion" : "Veto Promotion"}
+                              >
+                                {isVetoed ? <Plus size={8} /> : <X size={8} />}
+                              </button>
+                            </div>
+                            {!isVetoed && (
+                              <span>- APPLYING_LIVE</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {promoDiscount > 0 && (
+                         <div className="flex justify-between pt-1 border-t border-brand-accent/20 text-[10px] font-black text-brand-accent font-mono animate-pulse">
+                            <span>TOTAL_SAVINGS</span>
+                            <span>-{formatCurrency(promoDiscount)}</span>
+                         </div>
+                      )}
                     </div>
                   )}
 
@@ -945,10 +1006,10 @@ export default function POS({ onExit }: { onExit?: () => void }) {
         </button>
 
         {/* Hidden printable receipt */}
-        {lastSale &&
+        {lastSale && typeof document !== "undefined" && document.body &&
           createPortal(
             <ReceiptComp sale={lastSale} settings={settings} />,
-            (globalThis as any).document?.body,
+            document.body,
           )}
       </div>
     </div>

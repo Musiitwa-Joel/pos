@@ -21,7 +21,7 @@ interface InventoryReportProps {
   type: 'INVENTORY_STOCK' | 'LOW_STOCK';
 }
 
-export default function InventoryReport({ products, type }: InventoryReportProps) {
+export default React.memo(function InventoryReport({ products, type }: InventoryReportProps) {
   if (type === 'INVENTORY_STOCK') {
     return (
       <div className="flex-1 industrial-panel flex flex-col overflow-visible">
@@ -117,7 +117,7 @@ export default function InventoryReport({ products, type }: InventoryReportProps
               <th className="text-right">CURRENT</th>
               <th className="text-right hidden sm:table-cell">MIN_REQ</th>
               <th className="text-right">ORDER</th>
-              <th className="text-right">EST_COST</th>
+              <th className="text-right">TOTAL_EST_COST</th>
             </tr>
           </thead>
           <tbody>
@@ -137,4 +137,4 @@ export default function InventoryReport({ products, type }: InventoryReportProps
       </div>
     </div>
   );
-}
+})

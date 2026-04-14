@@ -8,12 +8,14 @@ interface DiscountModalProps {
   onClose: () => void;
   subtotal: number;
   currentDiscount: number;
-  onApply: (discount: number) => void;
+  onApply: (discount: number, reason: string) => void;
 }
 
 export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscount, onApply }: DiscountModalProps) {
   const [unit, setUnit] = useState<'fixed' | 'percent'>('fixed');
   const [inputValue, setInputValue] = useState('0');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -65,9 +67,16 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
     : numericValue;
 
   const finalTotal = Math.max(0, subtotal - effectiveDiscount);
+  const maxDiscount = subtotal * 0.15;
+  const isOverLimit = effectiveDiscount > maxDiscount;
 
   const handleSubmit = () => {
-    onApply(effectiveDiscount);
+    if (isOverLimit) return;
+    if (!reason.trim()) {
+      setError('JUSTIFICATION_REQUIRED: ENTER_REASON_FOR_OVERRIDE');
+      return;
+    }
+    onApply(effectiveDiscount, reason);
     onClose();
   };
 
@@ -116,11 +125,48 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
            </div>
         </div>
 
+        {/* Reason for Override */}
+        <div className="space-y-1">
+          <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest leading-none pt-1">
+            JUSTIFICATION_REQUIRED
+          </label>
+          <input 
+            type="text" 
+            className={cn(
+              "terminal-input w-full p-3 text-[10px]",
+              error?.includes('JUSTIFICATION') && "border-danger bg-danger/5"
+            )}
+            placeholder="E.G. CUSTOMER_LOYALTY, DAMAGED_PACKAGING..."
+            value={reason}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setError(null);
+            }}
+          />
+        </div>
+
+        {(isOverLimit || error) && (
+          <div className="p-3 bg-danger/10 border border-danger/30 text-danger text-[9px] font-mono animate-pulse uppercase leading-relaxed">
+            {isOverLimit 
+               ? (unit === 'percent' 
+                   ? `OVERRIDE_REFUSED: MAXIMUM_AUTHORIZED_REDUCTION_IS_15%_(${formatCurrency(maxDiscount)})`
+                   : `OVERRIDE_REFUSED: MAXIMUM_FIXED_REDUCTION_EXCEEDED. LIMIT: ${formatCurrency(maxDiscount)} (15% OF TOTAL)`)
+               : error
+            }
+          </div>
+        )}
+
         {/* Action Buttons (Keyboard-first) */}
         <div className="flex gap-2 mt-2">
           <button 
             onClick={handleSubmit} 
-            className="flex-1 py-4 industrial-panel bg-brand-accent text-white flex items-center justify-center gap-2 transition-all active:scale-95 shadow-[0_0_15px_rgba(var(--brand-accent-rgb),0.3)]"
+            disabled={isOverLimit}
+            className={cn(
+               "flex-1 py-4 industrial-panel flex items-center justify-center gap-2 transition-all active:scale-95",
+               isOverLimit 
+                 ? "bg-slate-800 text-slate-500 cursor-not-allowed grayscale" 
+                 : "bg-brand-accent text-white shadow-[0_0_15px_rgba(var(--brand-accent-rgb),0.3)]"
+            )}
           >
             <Check size={18} /> <span className="text-[10px] uppercase font-display tracking-widest">FINALIZE_OVERRIDE</span>
           </button>

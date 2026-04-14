@@ -306,6 +306,12 @@ export default function Reports() {
     fetchData();
   }, [dateRange.start, dateRange.end, selectedReport]);
 
+  const productMap = useMemo(() => {
+    const map = new Map();
+    products.forEach((p) => map.set(p.id, p));
+    return map;
+  }, [products]);
+
   const filteredMetadata = useMemo(() => {
     if (activeCategory === "All") return REPORTS_METADATA;
     return REPORTS_METADATA.filter((m) => m.category === activeCategory);
@@ -441,7 +447,7 @@ export default function Reports() {
           })
           .map((r) => [
             new Date(r.createdAt).toLocaleString(),
-            products.find((p) => p.id === r.productId)?.name || "UNKNOWN",
+            productMap.get(r.productId)?.name || "UNKNOWN",
             r.quantity,
             r.amount,
             r.reason,
@@ -452,7 +458,7 @@ export default function Reports() {
         data = purchaseHistory
           .filter((t) => t.type === "stock_in" || t.type === "purchase")
           .map((t) => {
-            const product = products.find((p) => p.id === t.productId);
+            const product = productMap.get(t.productId);
             const cost = t.unitCost || product?.costPrice || 0;
             return [
               new Date(t.createdAt).toLocaleString(),
@@ -636,7 +642,7 @@ export default function Reports() {
         totalValue = purchases.reduce((acc, t) => {
           const cost =
             t.unitCost ||
-            products.find((p) => p.id === t.productId)?.costPrice ||
+            productMap.get(t.productId)?.costPrice ||
             0;
           return acc + cost * (t.quantity || 0);
         }, 0);
@@ -826,7 +832,7 @@ export default function Reports() {
     });
 
     return Object.values(stats).sort((a: any, b: any) => b.revenue - a.revenue);
-  }, [sales, products, saleReturns, dateRange]);
+  }, [sales, products, saleReturns, dateRange, productMap]);
 
   const cashFlow = useMemo(() => {
     const startTs = new Date(dateRange.start).setHours(0, 0, 0, 0);
@@ -911,7 +917,7 @@ export default function Reports() {
       netCash,
       daily,
     };
-  }, [sales, expenses, saleReturns, dateRange]);
+  }, [sales, expenses, saleReturns, dateRange, customerPayments]);
 
   // Real-time synchronization for multi-user environments
   React.useEffect(() => {
@@ -932,112 +938,97 @@ export default function Reports() {
     let totalActual = 0;
     let totalClosedVariance = 0;
 
-    const shifts = cashierShifts.map((s) => {
+    // 🚀 Performance Optimization: Step 1 - Group data by shiftId using Maps (O(N))
+    const salesByShift = new Map<string, any[]>();
+    const returnsByShift = new Map<string, any[]>();
+    const paymentsByShift = new Map<string, any[]>();
+
+    // Group items that have an explicit shiftId
+    (sales || []).forEach((s) => {
+      if (s.shiftId) {
+        if (!salesByShift.has(s.shiftId)) salesByShift.set(s.shiftId, []);
+        salesByShift.get(s.shiftId)!.push(s);
+      }
+    });
+
+    (saleReturns || []).forEach((r) => {
+      if (r.shiftId) {
+        if (!returnsByShift.has(r.shiftId)) returnsByShift.set(r.shiftId, []);
+        returnsByShift.get(r.shiftId)!.push(r);
+      }
+    });
+
+    (customerPayments || []).forEach((p) => {
+      if (p.shiftId) {
+        if (!paymentsByShift.has(p.shiftId)) paymentsByShift.set(p.shiftId, []);
+        paymentsByShift.get(p.shiftId)!.push(p);
+      }
+    });
+
+    // 🚀 Performance Optimization: Step 2 - Pre-index workers
+    const employeeMap = new Map();
+    (employees || []).forEach((e) => employeeMap.set(e.id, e));
+
+    const shifts = (cashierShifts || []).map((s) => {
       totalOpening += s.openingCash || 0;
       totalActual += s.actualCash || 0;
 
-      const employee = (employees || []).find(
-        (e) => e.id === s.cashierId || e.name === s.cashierId,
-      );
+      const employee = employeeMap.get(s.cashierId);
       const employeeName = employee?.name?.toLowerCase();
 
-      // Unified matching logic for Sales
-      const shiftSales = (sales || []).filter((sale) => {
-        // High-Precision Matching: If the sale has our Shift ID, it is definitely ours
-        if (sale.shiftId && s.id === sale.shiftId) return true;
+      // High-Precision Matching: Use grouped maps first
+      let shiftSales = salesByShift.get(s.id) || [];
+      let shiftRefunds = returnsByShift.get(s.id) || [];
+      const shiftRecoveries = paymentsByShift.get(s.id) || [];
 
-        // If it has a Shift ID but it doesn't match ours, it belongs to someone else's shift
-        if (sale.shiftId) return false;
-
-        // Fallback for transition data (no shiftId)
-        const saleTime = new Date(sale.createdAt).getTime();
-        // 5-minute grace period for shift start to catch payments during opening
+      // Fallback for transition data (no shiftId): Only filter the items that didn't have a shiftId
+      if (shiftSales.length === 0) {
         const shiftStart = new Date(s.startTime).getTime() - 5 * 60000;
         const shiftEnd = s.endTime ? new Date(s.endTime).getTime() : Date.now();
 
-        const idMatch = sale.cashierId === s.cashierId;
-        const nameMatch =
-          employeeName &&
-          sale.cashierName &&
-          (sale.cashierName.toLowerCase().includes(employeeName) ||
-            employeeName.includes(sale.cashierName.toLowerCase()));
-        const invMatch =
-          (sale.cashierName &&
-            s.cashierId &&
-            s.cashierId
-              .toLowerCase()
-              .includes(sale.cashierName.toLowerCase())) ||
-          (sale.cashierId &&
-            s.cashierId &&
-            s.cashierId.toLowerCase().includes(sale.cashierId.toLowerCase()));
+        shiftSales = (sales || []).filter((sale) => {
+          if (sale.shiftId) return false; // Already tried explicitly grouped ones
+          const saleTime = new Date(sale.createdAt).getTime();
+          const idMatch = sale.cashierId === s.cashierId;
+          const nameMatch =
+            employeeName &&
+            sale.cashierName &&
+            (sale.cashierName.toLowerCase().includes(employeeName) ||
+              employeeName.includes(sale.cashierName.toLowerCase()));
+          return (
+            (idMatch || nameMatch) &&
+            saleTime >= shiftStart &&
+            saleTime <= shiftEnd + 60000
+          );
+        });
+      }
 
-        return (
-          (idMatch || nameMatch || invMatch) &&
-          saleTime >= shiftStart &&
-          saleTime <= shiftEnd + 60000
-        ); // 1 minute grace period for historical data
-      });
-
-      // Unified matching logic for Returns
-      const shiftRefunds = (saleReturns || []).filter((ret) => {
-        const retTime = new Date(ret.createdAt).getTime();
+      if (shiftRefunds.length === 0) {
         const shiftStart = new Date(s.startTime).getTime() - 5 * 60000;
         const shiftEnd = s.endTime ? new Date(s.endTime).getTime() : Date.now();
 
-        // Attribution Hardening: Identify the original sale's cashier
-        const parentSale = sales?.find((sale) => sale.id === ret.saleId);
+        shiftRefunds = (saleReturns || []).filter((ret) => {
+          if (ret.shiftId) return false;
+          const retTime = new Date(ret.createdAt).getTime();
+          // Find parent sale cashier for attribution
+          const parentSale = (sales || []).find((sale) => sale.id === ret.saleId);
+          const originalCashierId = parentSale?.cashierId;
+          const originalCashierName = parentSale?.cashierName;
+          if (!originalCashierId) return false;
 
-        // If we found the original sale, attribute the refund back to the original seller
-        // This ensures "Net Sales" accountability for the person who actually made the sale.
-        const originalCashierId = parentSale?.cashierId;
-        const originalCashierName = parentSale?.cashierName;
-
-        if (!originalCashierId) return false; // If orphaned, it won't be subtracted from anyone here
-
-        const retIdMatch = originalCashierId === s.cashierId;
-        const retNameMatch =
-          employeeName &&
-          originalCashierName &&
-          (originalCashierName.toLowerCase().includes(employeeName) ||
-            employeeName.includes(originalCashierName.toLowerCase()));
-
-        return (
-          (retIdMatch || retNameMatch) &&
-          retTime >= shiftStart &&
-          retTime <= shiftEnd + 86400000
-        ); // Allow returns to match the original seller regardless of time window
-      });
-
-      // Unified matching logic for Debt Recovery (Customer Payments)
-      const shiftRecoveries = (customerPayments || []).filter((pay) => {
-        if (pay.shiftId && s.id === pay.shiftId) return true;
-        if (pay.shiftId) return false;
-
-        const payTime = new Date(pay.createdAt).getTime();
-        // Allow 5 minute grace period for shift start to catch payments made during opening
-        const shiftStart = new Date(s.startTime).getTime() - 5 * 60000;
-        const shiftEnd = s.endTime
-          ? new Date(s.endTime).getTime()
-          : new Date().getTime();
-
-        const idMatch = pay.recordedBy === s.cashierId;
-        const employee = (employees || []).find((e) => e.id === pay.recordedBy);
-        const nameMatch =
-          employeeName &&
-          employee?.name &&
-          (employee.name.toLowerCase().includes(employeeName) ||
-            employeeName.includes(employee.name.toLowerCase()));
-
-        const method = (pay.paymentMethod || "").toLowerCase();
-        const isCash = method === "cash" || method === "cash-transaction";
-
-        return (
-          (idMatch || nameMatch) &&
-          isCash &&
-          payTime >= shiftStart &&
-          payTime <= shiftEnd + 60000
-        );
-      });
+          const retIdMatch = originalCashierId === s.cashierId;
+          const retNameMatch =
+            employeeName &&
+            originalCashierName &&
+            (originalCashierName.toLowerCase().includes(employeeName) ||
+              employeeName.includes(originalCashierName.toLowerCase()));
+          return (
+            (retIdMatch || retNameMatch) &&
+            retTime >= shiftStart &&
+            retTime <= shiftEnd + 86400000
+          );
+        });
+      }
 
       const cashSales = shiftSales.filter(
         (sale) => sale.paymentMethod === "cash",
@@ -1066,11 +1057,9 @@ export default function Reports() {
         0,
       );
 
-      // Expected cash only includes physical money: Opening + Cash + Recovery - Refunds
       const expectedTotal =
         (s.openingCash || 0) + cashTotal + recoveryTotal - refundsTotal;
 
-      // Aggregate Stats: Include all shifts in Expected, but only include Actual/Variance for CLOSED shifts to avoid skewed data
       totalExpected += expectedTotal;
       if (s.status === "CLOSED") {
         totalClosedVariance += (s.actualCash || 0) - expectedTotal;
@@ -1102,29 +1091,30 @@ export default function Reports() {
       };
     });
 
-    // Handle "Orphaned" Recoveries (Payments made outside of any active shift)
-    const activeShiftIds = shifts.map((s) => s.id);
+    // Handle "Orphaned" Recoveries
     const orphanedRecoveries = (customerPayments || [])
       .filter((pay) => {
-        // Must not belong to any shift we found
-        const matchesAnyShift = shifts.some((s) => {
+        if (pay.shiftId)
+          return !cashierShifts.some((cs: any) => cs.id === pay.shiftId);
+        const matchesAnyShift = (cashierShifts || []).some((s: any) => {
           const payTime = new Date(pay.createdAt).getTime();
           const shiftStart = new Date(s.startTime).getTime();
           const shiftEnd = s.endTime ? new Date(s.endTime) : new Date();
-          const idMatch =
+          return (
             pay.recordedBy === s.cashierId &&
             payTime >= shiftStart &&
-            payTime <= shiftEnd.getTime() + 60000;
-          return (pay.shiftId && pay.shiftId === s.id) || idMatch;
+            payTime <= shiftEnd.getTime() + 60000
+          );
         });
         const method = (pay.paymentMethod || "").toLowerCase();
-        const isCash = method === "cash" || method === "cash-transaction";
-        return !matchesAnyShift && isCash;
+        return (
+          !matchesAnyShift && (method === "cash" || method === "cash-transaction")
+        );
       })
       .reduce((acc, pay) => acc + pay.amount, 0);
 
     totalExpected += orphanedRecoveries;
-    totalActual += orphanedRecoveries; // Assume orphaned cash is in the vault/drawer
+    totalActual += orphanedRecoveries;
 
     return {
       cashierStats: {
@@ -1240,7 +1230,7 @@ export default function Reports() {
         (a, b) => b.profit - a.profit,
       ),
     };
-  }, [sales, products, dateRange]);
+  }, [sales, products, dateRange, productMap]);
 
   const categoryStats = useMemo(() => {
     const startTs = new Date(dateRange.start).setHours(0, 0, 0, 0);
@@ -1293,7 +1283,7 @@ export default function Reports() {
     });
 
     return Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
-  }, [sales, products, dateRange]);
+  }, [sales, products, dateRange, productMap]);
 
   if (selectedReport) {
     const currentMeta = REPORTS_METADATA.find((m) => m.id === selectedReport)!;

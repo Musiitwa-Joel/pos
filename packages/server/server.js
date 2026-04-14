@@ -88,6 +88,7 @@ const onboardingUpload = multer({
 // enabling our servers to shut down gracefully.
 
 app.use(express.static("public"));
+app.use("/uploads", express.static("uploads"));
 app.use("/backups", express.static("backups"));
 app.use(cors()); // Enable CORS for ALL routes
 app.use(express.json());
@@ -328,6 +329,7 @@ app.use(
             context: {
               ...params.context,
               user: currentUser,
+              db: activeDb, // Injecting the institutional pool for forensic anchoring
               req,
               ip: req.ip,
             },

@@ -143,7 +143,7 @@ export default function Inventory() {
         barcode: formData.barcode || undefined,
         costPrice: parseFloat(formData.costPrice),
         price: parseFloat(formData.finalPrice || formData.sellingPrice),
-        initialStock: parseInt(formData.initialStock) || 0,
+        initialStock: 0,
         unit: formData.unit,
         minStock: parseInt(formData.minStock) || 5,
       });
@@ -154,7 +154,6 @@ export default function Inventory() {
         newValue: JSON.stringify({
           price: formData.sellingPrice,
           cost: formData.costPrice,
-          initialStock: formData.initialStock,
         }),
       });
 
@@ -589,29 +588,6 @@ export default function Inventory() {
                       >
                         {product.stock} {product.unit}
                       </span>
-                      <div
-                        className={cn(
-                          "flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity",
-                          isOffline && "hidden",
-                        )}
-                      >
-                        <button
-                          onClick={() =>
-                            handleAdjustStock(product.id, 1, "restock")
-                          }
-                          className="text-slate-900 dark:text-slate-500 hover:text-success"
-                        >
-                          <ArrowUpCircle size={12} />
-                        </button>
-                        <button
-                          onClick={() =>
-                            handleAdjustStock(product.id, -1, "adjustment")
-                          }
-                          className="text-slate-900 dark:text-slate-500 hover:text-danger"
-                        >
-                          <ArrowDownCircle size={12} />
-                        </button>
-                      </div>
                       {isOffline && (
                         <span className="text-[7px] font-mono text-slate-800 dark:text-slate-900 dark:text-slate-500 font-bold uppercase">
                           LOCKED
@@ -748,24 +724,6 @@ export default function Inventory() {
                       </span>
                     </div>
 
-                    <div className={cn("flex gap-1", isOffline && "hidden")}>
-                      <button
-                        onClick={() =>
-                          handleAdjustStock(product.id, 1, "restock")
-                        }
-                        className="w-7 h-7 flex items-center justify-center bg-brand-accent/10 text-brand-accent border border-brand-accent/20 rounded active:bg-brand-accent active:text-white transition-colors"
-                      >
-                        <ArrowUpCircle size={14} />
-                      </button>
-                      <button
-                        onClick={() =>
-                          handleAdjustStock(product.id, -1, "adjustment")
-                        }
-                        className="w-7 h-7 flex items-center justify-center bg-brand-steel/20 text-slate-800 dark:text-slate-400 border border-brand-steel/30 rounded active:bg-danger active:text-white transition-colors"
-                      >
-                        <ArrowDownCircle size={14} />
-                      </button>
-                    </div>
                   </div>
                 </div>
 
@@ -932,21 +890,7 @@ export default function Inventory() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="space-y-1">
-              <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
-                Initial Stock
-              </label>
-              <input
-                type="number"
-                className="terminal-input w-full p-2 text-xs"
-                placeholder="0"
-                value={formData.initialStock}
-                onChange={(e) =>
-                  setFormData({ ...formData, initialStock: e.target.value })
-                }
-              />
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
                 Unit of Measure
@@ -1310,62 +1254,13 @@ export default function Inventory() {
               <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
                 Current Stock
               </label>
-              <div className="flex gap-2">
                 <input
                   type="number"
                   className="terminal-input w-full p-2 text-xs bg-brand-steel/10"
                   value={editingProduct?.stock}
                   disabled
                 />
-                {isAdjustingStock ? (
-                  <div className="flex gap-1 animate-in zoom-in-95 duration-200">
-                    <input
-                      type="number"
-                      className="terminal-input w-20 p-2 text-xs border-brand-accent pt-1"
-                      placeholder="+/-"
-                      autoFocus
-                      value={adjustmentQty}
-                      onChange={(e) => setAdjustmentQty(e.target.value)}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const qty = parseInt(adjustmentQty);
-                        if (!isNaN(qty) && qty !== 0)
-                          handleAdjustStock(
-                            editingProduct!.id,
-                            qty,
-                            "adjustment",
-                          );
-                        setIsAdjustingStock(false);
-                        setAdjustmentQty("");
-                      }}
-                      className="btn-industrial bg-brand-accent text-white px-2"
-                    >
-                      <Save size={12} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAdjustingStock(false);
-                        setAdjustmentQty("");
-                      }}
-                      className="btn-industrial px-2 text-slate-900 dark:text-slate-500"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => setIsAdjustingStock(true)}
-                    className="btn-industrial btn-outline px-3 text-[8px]"
-                  >
-                    ADJUST
-                  </button>
-                )}
               </div>
-            </div>
             <div className="space-y-1">
               <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
                 Min Stock Alert

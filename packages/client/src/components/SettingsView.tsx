@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Shield, Database, Bell, Monitor, Terminal, Save, CheckCircle2, Loader2, Plus, Download } from 'lucide-react';
+import { Settings as SettingsIcon, Shield, Database, Bell, Monitor, Terminal, Save, CheckCircle2, Loader2, Plus, Download, LayoutGrid } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useHardware } from '../HardwareContext';
+import { Role } from '../types';
 import Select from './Select';
 import { toast } from 'sonner';
 
 type SettingsSection = 'GENERAL' | 'ROLES' | 'SECURITY' | 'DATABASE' | 'ADVANCED';
 
 export default function SettingsView() {
-  const { 
-    settings, updateSetting, roles, addRole, deleteRole, isOffline,
+  const {
+    settings, updateSetting, roles, addRole, updateRole, deleteRole, isOffline,
     backupDatabase, testNotifications, getSystemTelemetry,
     initializeSettingsDB, initializeUserDB
   } = useHardware();
@@ -22,6 +23,21 @@ export default function SettingsView() {
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [telemetry, setTelemetry] = useState<any>(null);
+  const [editingRole, setEditingRole] = useState<Role | null>(null);
+
+  const MODULES = [
+    { id: 'dashboard', label: 'INTELLIGENCE (DASHBOARD)' },
+    { id: 'pos', label: 'TERMINAL (POS)' },
+    { id: 'inventory', label: 'INVENTORY' },
+    { id: 'credit', label: 'CUSTOMER_CREDIT' },
+    { id: 'hr', label: 'HUMAN_RESOURCES' },
+    { id: 'sales', label: 'AUDIT_LOGS' },
+    { id: 'reports', label: 'FINANCIAL_ANALYTICS' },
+    { id: 'suppliers', label: 'SUPPLIERS' },
+    { id: 'expenses', label: 'EXPENSES' },
+    { id: 'returns', label: 'RETURNS_HUB' },
+    { id: 'settings', label: 'SYSTEM_SETTINGS' }
+  ];
 
   useEffect(() => {
     if (settings) {
@@ -67,7 +83,7 @@ export default function SettingsView() {
       const result = await backupDatabase();
       if (result.success) {
         toast.success(`SYSTEM_BACKUP_SUCCESS: ${result.filename} (${result.size.toFixed(2)} KB)`);
-        
+
         // Automated Handshake: Trigger browser download
         const downloadUrl = `${window.location.origin.replace(':3000', ':9000')}/backups/${result.filename}`;
         const link = document.createElement('a');
@@ -206,7 +222,7 @@ export default function SettingsView() {
               </div>
 
               <div className="space-y-2">
-                <Select 
+                <Select
                   label="CURRENCY_SYMBOL"
                   options={[
                     { label: 'UGX (UGANDAN SHILLING)', value: 'UGX' },
@@ -224,84 +240,198 @@ export default function SettingsView() {
             <section className="space-y-6">
               <h3 className="text-[10px] font-display text-brand-accent border-b border-brand-accent/20 pb-2">STAFF_ROLE_MANAGEMENT</h3>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="p-4 bg-[var(--panel-bg)]/50 border border-brand-steel space-y-4">
-                  <h4 className="text-[9px] font-display text-slate-800 dark:text-slate-400">ADD_NEW_ROLE</h4>
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="ROLE_NAME (E.G. SALES_MANAGER)"
-                      className="terminal-input w-full py-2 px-3 text-[10px]"
-                      value={newRoleName}
-                      onChange={e => setNewRoleName(e.target.value)}
-                    />
-                    <textarea
-                      placeholder="ROLE_DESCRIPTION..."
-                      className="terminal-input w-full py-2 px-3 text-[10px] h-20"
-                      value={newRoleDesc}
-                      onChange={e => setNewRoleDesc(e.target.value)}
-                    />
-                    <button
-                      onClick={async () => {
-                        if (!newRoleName) return toast.error('Role name is required');
-                        setIsSubmittingRole(true);
-                        try {
-                          await addRole({ name: newRoleName, description: newRoleDesc });
-                          setNewRoleName('');
-                          setNewRoleDesc('');
-                        } finally {
-                          setIsSubmittingRole(false);
-                        }
-                      }}
-                      disabled={isSubmittingRole || isOffline}
-                      className={cn(
-                        "btn-industrial btn-primary w-full py-2 text-[9px] flex items-center justify-center gap-2",
-                        (isSubmittingRole || isOffline) && "opacity-80 dark:opacity-50 grayscale cursor-not-allowed"
-                      )}
-                    >
-                      {isSubmittingRole ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
-                      {isOffline ? 'SYNC_PAUSED' : (isSubmittingRole ? 'REGISTERING...' : 'REGISTER_ROLE')}
-                    </button>
-                  </div>
-                </div>
-
-                <div className="industrial-panel bg-[var(--panel-bg)]/30 overflow-hidden">
-                  <div className="p-3 border-b border-white/5 bg-white/5">
-                    <h4 className="text-[9px] font-display text-slate-800 dark:text-slate-400 uppercase">Registered Roles</h4>
-                  </div>
-                  <div className="max-h-[300px] overflow-y-auto">
-                    <table className="w-full text-[10px] text-left">
-                      <thead className="text-[8px] text-slate-900 dark:text-slate-500 font-display border-b border-white/5">
-                        <tr>
-                          <th className="px-4 py-2">ROLE</th>
-                          <th className="px-4 py-2">DESC</th>
-                          <th className="px-4 py-2 text-right">ACTION</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {roles.map(role => (
-                          <tr key={role.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td className="px-4 py-3 font-medium text-brand-accent">{role.name}</td>
-                            <td className="px-4 py-3 text-slate-800 dark:text-slate-400 truncate max-w-[150px]">{role.description || '-'}</td>
-                            <td className="px-4 py-3 text-right">
-                              <button
-                                onClick={() => deleteRole(role.id)}
-                                className="text-danger hover:underline text-[8px] font-display"
-                              >
-                                REMOVE
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                        {roles.length === 0 && (
-                          <tr>
-                            <td colSpan={3} className="px-4 py-8 text-center text-slate-900 dark:text-slate-500 font-mono italic">
-                              NO_ROLES_DEFINED
-                            </td>
-                          </tr>
+              <div className={cn("grid gap-6 transition-all duration-300", editingRole ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2 mt-4")}>
+                {!editingRole && (
+                  <div className="p-4 bg-[var(--panel-bg)]/50 border border-brand-steel space-y-4">
+                    <h4 className="text-[9px] font-display text-slate-800 dark:text-slate-400">ADD_NEW_ROLE</h4>
+                    <div className="space-y-3">
+                      <input
+                        type="text"
+                        placeholder="ROLE_NAME (E.G. SALES_MANAGER)"
+                        className="terminal-input w-full py-2 px-3 text-[10px]"
+                        value={newRoleName}
+                        onChange={e => setNewRoleName(e.target.value)}
+                      />
+                      <textarea
+                        placeholder="ROLE_DESCRIPTION..."
+                        className="terminal-input w-full py-2 px-3 text-[10px] h-20"
+                        value={newRoleDesc}
+                        onChange={e => setNewRoleDesc(e.target.value)}
+                      />
+                      <button
+                        onClick={async () => {
+                          if (!newRoleName) return toast.error('Role name is required');
+                          setIsSubmittingRole(true);
+                          try {
+                            await addRole({ name: newRoleName, description: newRoleDesc });
+                            setNewRoleName('');
+                            setNewRoleDesc('');
+                          } finally {
+                            setIsSubmittingRole(false);
+                          }
+                        }}
+                        disabled={isSubmittingRole || isOffline}
+                        className={cn(
+                          "btn-industrial btn-primary w-full py-2 text-[9px] flex items-center justify-center gap-2",
+                          (isSubmittingRole || isOffline) && "opacity-80 dark:opacity-50 grayscale cursor-not-allowed"
                         )}
-                      </tbody>
-                    </table>
+                      >
+                        {isSubmittingRole ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />}
+                        {isOffline ? 'SYNC_PAUSED' : (isSubmittingRole ? 'REGISTERING...' : 'REGISTER_ROLE')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div className="industrial-panel bg-[var(--panel-bg)]/30 overflow-hidden flex flex-col">
+                  <div className="p-3 border-b border-white/5 bg-white/5 flex justify-between items-center">
+                    <h4 className="text-[9px] font-display text-slate-800 dark:text-slate-400 uppercase">Registered Roles</h4>
+                    {editingRole && (
+                      <button
+                        onClick={() => setEditingRole(null)}
+                        className="text-[9px] font-display text-brand-accent hover:underline flex items-center gap-2"
+                      >
+                         <LayoutGrid size={12} />
+                         EXIT_CONSOLE
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex-1 overflow-hidden flex flex-col">
+                    {!editingRole ? (
+                      <div className="max-h-[400px] overflow-y-auto">
+                        <table className="w-full text-[10px] text-left">
+                          <thead className="text-[8px] text-slate-900 dark:text-slate-500 font-display border-b border-white/5">
+                            <tr>
+                              <th className="px-4 py-2">ROLE</th>
+                              <th className="px-4 py-2">DESC</th>
+                              <th className="px-4 py-2 text-right">ACTION</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {roles.map(role => (
+                              <tr key={role.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                <td className="px-4 py-3 font-medium text-brand-accent">{role.name}</td>
+                                <td className="px-4 py-3 text-slate-800 dark:text-slate-400 truncate max-w-[150px]">{role.description || '-'}</td>
+                                <td className="px-4 py-3 text-right space-x-3">
+                                  {role.name.toUpperCase() !== 'ADMIN' && role.id !== 'admin' ? (
+                                    <>
+                                      <button
+                                        onClick={() => setEditingRole(role)}
+                                        className="text-brand-accent hover:underline text-[8px] font-display"
+                                      >
+                                        MANAGE
+                                      </button>
+                                      <button
+                                        onClick={() => deleteRole(role.id)}
+                                        className="text-danger hover:underline text-[8px] font-display"
+                                      >
+                                        REMOVE
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <span className="text-[7px] font-mono text-brand-accent/50 uppercase tracking-tighter italic">PROTECTED_SYSTEM_ROLE</span>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                            {roles.length === 0 && (
+                              <tr>
+                                <td colSpan={3} className="px-4 py-8 text-center text-slate-900 dark:text-slate-500 font-mono italic">
+                                  NO_ROLES_DEFINED
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <div className="p-6 space-y-6 overflow-y-auto max-h-[600px] scrollbar-industrial">
+                        <div className="flex justify-between items-center border-b border-brand-steel/30 pb-4">
+                             <h5 className="text-[10px] font-display text-brand-accent uppercase tracking-widest leading-none">
+                              ROLE_IDENTITY_CONSOLE // {editingRole.name}
+                            </h5>
+                            <p className="text-[7px] text-slate-500 mt-1 uppercase tracking-tighter">Modify institutional role properties and security protocols.</p>
+                          </div>
+                          <button 
+                            onClick={() => setEditingRole(null)}
+                            className="text-[9px] font-display text-slate-500 hover:text-brand-accent transition-colors flex items-center gap-2 border border-brand-steel/30 px-3 py-1.5 bg-brand-accent/5 hover:border-brand-accent/50"
+                          >
+                            <LayoutGrid size={12} />
+                            EXIT_CONSOLE
+                          </button>
+
+                        {/* Force-Sync Identity Modification Pane */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-brand-accent/5 border border-brand-accent/20 rounded-sm">
+                          <div className="space-y-4">
+                            <div>
+                              <p className="text-[8px] font-display text-brand-accent uppercase mb-1.5 tracking-widest">Target_Role_Name</p>
+                              <input 
+                                className="w-full bg-[var(--bg-panel)] border border-brand-steel/30 p-2.5 text-[10px] uppercase font-display text-[var(--text-main)] outline-none focus:border-brand-accent transition-all ring-0 shadow-[inset_0_0_10px_rgba(0,0,0,0.1)]"
+                                value={editingRole.name || ""} 
+                                onChange={(e) => setEditingRole({...editingRole, name: e.target.value.toUpperCase()})}
+                              />
+                            </div>
+                            <div>
+                              <p className="text-[8px] font-display text-brand-accent uppercase mb-1.5 tracking-widest">Access_Description</p>
+                              <textarea 
+                                key={`desc-${editingRole.id}`}
+                                className="w-full bg-[var(--bg-panel)] border border-brand-steel/30 p-2.5 text-[10px] font-display text-[var(--text-main)] outline-none focus:border-brand-accent transition-all min-h-[80px] shadow-[inset_0_0_10px_rgba(0,0,0,0.1)]"
+                                value={editingRole.description || ""} 
+                                onChange={(e) => setEditingRole({...editingRole, description: e.target.value})}
+                              />
+                            </div>
+                            <button 
+                              onClick={async () => {
+                                try {
+                                  await updateRole(editingRole.id, { 
+                                    name: editingRole.name, 
+                                    description: editingRole.description 
+                                  });
+                                  toast.success("Identity synchronisation successful.");
+                                } catch (err) {
+                                  toast.error("Handshake failed.");
+                                }
+                              }}
+                              className="btn-industrial btn-primary py-3 px-6 text-[9px] w-full font-display tracking-widest"
+                            >
+                              SAVE_IDENTITY_MODIFICATIONS
+                            </button>
+                          </div>
+
+                          <div className="space-y-3">
+                            <p className="text-[8px] font-display text-brand-accent uppercase border-b border-brand-accent/20 pb-1.5 tracking-widest">Authorization_Matrix</p>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-2 scrollbar-industrial">
+                              {MODULES.map(module => {
+                                const isAuthorized = editingRole.authorizedModules?.includes(module.id);
+                                return (
+                                  <button
+                                    key={module.id}
+                                    className={cn(
+                                      "flex items-center justify-between p-3 border transition-all text-[9px] font-display h-12 uppercase",
+                                      isAuthorized 
+                                        ? "bg-brand-accent/10 border-brand-accent text-brand-accent shadow-[inset_0_0_15px_rgba(255,107,0,0.05)]" 
+                                        : "bg-[var(--bg-panel)] border-brand-steel/30 text-slate-500 hover:border-brand-accent/50"
+                                    )}
+                                    onClick={async () => {
+                                      const current = editingRole.authorizedModules || [];
+                                      const updatedModules = isAuthorized 
+                                        ? current.filter(id => id !== module.id)
+                                        : [...current, module.id];
+                                      
+                                      await updateRole(editingRole.id, { authorizedModules: updatedModules });
+                                      setEditingRole(prev => prev ? { ...prev, authorizedModules: updatedModules } : null);
+                                    }}
+                                  >
+                                    <span className="truncate">{module.label}</span>
+                                    {isAuthorized ? <CheckCircle2 size={12} className="flex-shrink-0" /> : <Shield size={10} className="opacity-10" />}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -318,7 +448,7 @@ export default function SettingsView() {
                       <p className="text-[10px] font-display text-[var(--text-main)] group-hover:text-brand-accent transition-colors">TWO_FACTOR_AUTHENTICATION</p>
                       <p className="text-[8px] text-slate-900 dark:text-slate-500 font-mono mt-1 uppercase tracking-tighter opacity-90 dark:opacity-60">Requires app verification for all administrative logins.</p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => handleChange('ENABLE_2FA', localSettings.ENABLE_2FA === 'true' ? 'false' : 'true')}
                       className={cn(
                         "btn-industrial py-1 px-4 text-[8px] tracking-[0.2em] transition-all",
@@ -328,13 +458,13 @@ export default function SettingsView() {
                       {localSettings.ENABLE_2FA === 'true' ? 'ENABLED_SHIELD' : 'ENABLE_PROTOCOL'}
                     </button>
                   </div>
-                  
+
                   <div className="border-t border-brand-steel/30 pt-6 flex justify-between items-center group">
                     <div>
                       <p className="text-[10px] font-display text-[var(--text-main)] group-hover:text-brand-accent transition-colors">SESSION_TIMEOUT</p>
                       <p className="text-[8px] text-slate-900 dark:text-slate-500 font-mono mt-1 uppercase tracking-tighter opacity-90 dark:opacity-60">Automatically logs out inactive terminals after specified interval.</p>
                     </div>
-                    <Select 
+                    <Select
                       className="w-48"
                       options={[
                         { label: '5 MINUTES (STRICT)', value: '5' },
@@ -365,7 +495,7 @@ export default function SettingsView() {
                       <p className="text-[9px] text-slate-900 dark:text-slate-500 font-mono mt-1 tracking-tight italic">Generates a complete SQL archive of the current operational state.</p>
                     </div>
                   </div>
-                  <button 
+                  <button
                     onClick={handleBackup}
                     disabled={isBackingUp || isOffline}
                     className={cn(
@@ -385,7 +515,7 @@ export default function SettingsView() {
           {activeSection === 'ADVANCED' && (
             <section className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
               <h3 className="text-[10px] font-display text-brand-accent border-b border-brand-accent/20 pb-2 uppercase tracking-widest italic opacity-90 dark:opacity-60">Strategic_Telemetry_Dashboard</h3>
-              
+
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 {[
                   { label: 'Uptime', value: telemetry?.uptime || '0h 0m', icon: <Monitor size={14} /> },
@@ -399,7 +529,7 @@ export default function SettingsView() {
                       <div className="text-slate-900 dark:text-slate-500">{stat.icon}</div>
                     </div>
                     <div>
-                       <div className={cn("text-lg font-mono font-black tracking-tighter leading-none", stat.color || "text-[var(--text-main)]")}>
+                      <div className={cn("text-lg font-mono font-black tracking-tighter leading-none", stat.color || "text-[var(--text-main)]")}>
                         {stat.value}
                       </div>
                       {stat.detail && <span className="text-[8px] font-mono text-slate-900 dark:text-slate-500 uppercase italic">{stat.detail}</span>}

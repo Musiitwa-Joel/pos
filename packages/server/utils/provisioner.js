@@ -27,7 +27,8 @@ export const provisionInstitution = async (tenantData, password) => {
       `CREATE TABLE IF NOT EXISTS roles (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE,
-        description TEXT
+        description TEXT,
+        authorized_modules TEXT
       ) ENGINE=MyISAM`,
       `CREATE TABLE IF NOT EXISTS employees (
         id VARCHAR(50) PRIMARY KEY,
@@ -43,14 +44,20 @@ export const provisionInstitution = async (tenantData, password) => {
       ) ENGINE=MyISAM`,
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
+        name VARCHAR(255),
         username VARCHAR(255) NOT NULL UNIQUE,
         email VARCHAR(255) UNIQUE,
         password_hash VARCHAR(255),
-        role ENUM('admin', 'manager', 'cashier', 'staff') DEFAULT 'staff',
+        role VARCHAR(100) DEFAULT 'PENDING_ASSIGNMENT',
         employee_id VARCHAR(50),
         is_active BOOLEAN DEFAULT TRUE,
+        authorized_modules TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_email (email),
+        INDEX idx_employee (employee_id),
+        FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
       ) ENGINE=MyISAM`,
       `CREATE TABLE IF NOT EXISTS system_settings (
         setting_key VARCHAR(100) PRIMARY KEY,
@@ -107,8 +114,16 @@ export const provisionInstitution = async (tenantData, password) => {
     // 4. Institutional Role Migration (Pre-approved Static Data)
     try {
       // Migrate from current 'tred_hardware' database - ensures standard security groups are available
-      await tenantPool.query(`INSERT IGNORE INTO \`${db_name}\`.roles (id, name, description) SELECT id, name, description FROM \`tred_hardware\`.roles`);
-      console.log(`[Vanguard Factory] Institutional Roles Synchronized.`);
+      await tenantPool.query(`INSERT IGNORE INTO \`${db_name}\`.roles (id, name, description, authorized_modules) SELECT id, name, description, authorized_modules FROM \`tred_hardware\`.roles`);
+      
+      // 🛡️ Security Anchor: Force ADMIN role to have all laboratory modules attached
+      const allModules = ['dashboard', 'pos', 'inventory', 'credit', 'hr', 'sales', 'reports', 'suppliers', 'expenses', 'returns', 'settings'];
+      await tenantPool.query(
+        `UPDATE \`${db_name}\`.roles SET authorized_modules = ? WHERE name = 'ADMIN' OR id = 'admin'`,
+        [JSON.stringify(allModules)]
+      );
+      
+      console.log(`[Vanguard Factory] Institutional Roles Synchronized and Admin Hardened.`);
     } catch (err) {
       console.warn(`[Vanguard Factory] Role Migration Warning: ${err.message}`);
     }
@@ -118,7 +133,7 @@ export const provisionInstitution = async (tenantData, password) => {
     const passwordHash = await bcrypt.hash(password, 10);
     
     await tenantPool.query(
-      `INSERT INTO \`${db_name}\`.users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, 'admin')`,
+      `INSERT INTO \`${db_name}\`.users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, 'ADMIN')`,
       [adminId, owner_email, owner_email, passwordHash]
     );
     console.log(`[Vanguard Factory] Institutional Administrator Provisioned.`);

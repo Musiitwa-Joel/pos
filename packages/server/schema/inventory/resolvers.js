@@ -17,21 +17,6 @@ setInterval(() => {
 
 const recordAudit = async (db, userId, action, target, oldValue = null, newValue = null) => {
   try {
-    // 🛡️ Schema Self-Healing for Audit Logs
-    await db.query(`
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id VARCHAR(36) PRIMARY KEY,
-        user_id VARCHAR(36) NOT NULL,
-        action VARCHAR(255) NOT NULL,
-        target VARCHAR(255) NOT NULL,
-        old_value TEXT,
-        new_value TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        INDEX idx_user (user_id),
-        INDEX idx_action (action)
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
-    `);
-
     if (!userId) {
       console.warn(`[recordAudit] Missing userId for action: ${action}. Defaulting to SYSTEM.`);
     }
@@ -41,7 +26,18 @@ const recordAudit = async (db, userId, action, target, oldValue = null, newValue
       [uuidv7(), userId || 'SYSTEM', action, target, oldValue, newValue]
     );
   } catch (err) {
-    console.error('[recordAudit] Critical Logging Failure:', err.message);
+    if (err.code === 'ER_NO_SUCH_TABLE') {
+      // Fallback: try to initialize and retry once
+      try {
+        await db.query("CREATE TABLE IF NOT EXISTS audit_logs (id VARCHAR(36) PRIMARY KEY, user_id VARCHAR(36) NOT NULL, action VARCHAR(255) NOT NULL, target VARCHAR(255) NOT NULL, old_value TEXT, new_value TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_user (user_id), INDEX idx_action (action), INDEX idx_created (created_at)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
+        await db.query(
+          "INSERT INTO audit_logs (id, user_id, action, target, old_value, new_value) VALUES (?, ?, ?, ?, ?, ?)",
+          [uuidv7(), userId || 'SYSTEM', action, target, oldValue, newValue]
+        );
+      } catch (re) { }
+    } else {
+      console.error('[recordAudit] Critical Logging Failure:', err.message);
+    }
   }
 };
 
@@ -57,7 +53,7 @@ export default {
         `, [parent.id]);
         return rows[0].count;
       } catch (err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return 0;
+        if (err.code === 'ER_NO_SUCH_TABLE') return 0;
         throw err;
       }
     },
@@ -71,7 +67,7 @@ export default {
         `, [parent.id]);
         return rows[0].last_date ? rows[0].last_date.toISOString() : null;
       } catch (err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return null;
+        if (err.code === 'ER_NO_SUCH_TABLE') return null;
         throw err;
       }
     },
@@ -141,7 +137,7 @@ export default {
         `, [parent.id]);
         return rows[0].last_date ? rows[0].last_date.toISOString() : null;
       } catch (err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return null;
+        if (err.code === 'ER_NO_SUCH_TABLE') return null;
         throw err;
       }
     },
@@ -161,7 +157,7 @@ export default {
         const diffDays = Math.round((todayDay - lastDay) / (1000 * 60 * 60 * 24));
         return Math.max(0, diffDays);
       } catch (err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return null;
+        if (err.code === 'ER_NO_SUCH_TABLE') return null;
         throw err;
       }
     }
@@ -185,30 +181,30 @@ export default {
           createdAt: r.created_at ? r.created_at.toISOString() : null,
           updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
         }));
-      } catch(err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return [];
+      } catch (err) {
+        if (err.code === 'ER_NO_SUCH_TABLE') return [];
         console.error('Products resolver error:', err);
         throw err;
       }
     },
     product: async (_, { id }, { db }) => {
       const [rows] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
-      if(rows.length === 0) return null;
+      if (rows.length === 0) return null;
       const r = rows[0];
       return {
-          ...r,
-          id: r.id,
-          name: r.name,
-          category: r.category,
-          price: parseFloat(r.price),
-          costPrice: parseFloat(r.cost_price),
-          stock: r.stock,
-          minStock: r.min_stock,
-          unit: r.unit,
-          barcode: r.barcode,
-          supplierId: r.supplier_id,
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        ...r,
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        price: parseFloat(r.price),
+        costPrice: parseFloat(r.cost_price),
+        stock: r.stock,
+        minStock: r.min_stock,
+        unit: r.unit,
+        barcode: r.barcode,
+        supplierId: r.supplier_id,
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
     inventoryTransactions: async (_, { productId, startDate, endDate }, { db }) => {
@@ -239,7 +235,7 @@ export default {
 
         query += " ORDER BY created_at DESC";
         const [rows] = await db.query(query, params);
-        
+
         return rows.map(r => ({
           id: r.id,
           productId: r.product_id,
@@ -251,8 +247,8 @@ export default {
           createdBy: r.created_by,
           createdAt: r.created_at ? r.created_at.toISOString() : null,
         }));
-      } catch(err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return [];
+      } catch (err) {
+        if (err.code === 'ER_NO_SUCH_TABLE') return [];
         throw err;
       }
     },
@@ -270,26 +266,26 @@ export default {
           createdAt: r.created_at ? r.created_at.toISOString() : null,
           updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
         }));
-      } catch(err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return [];
+      } catch (err) {
+        if (err.code === 'ER_NO_SUCH_TABLE') return [];
         throw err;
       }
     },
     supplier: async (_, { id }, { db }) => {
       const [rows] = await db.query("SELECT * FROM suppliers WHERE id = ?", [id]);
-      if(rows.length === 0) return null;
+      if (rows.length === 0) return null;
       const r = rows[0];
       return {
-          ...r,
-          id: r.id,
-          name: r.name,
-          contact: r.contact,
-          phone: r.phone,
-          email: r.email,
-          balance: parseFloat(r.balance),
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        ...r,
+        id: r.id,
+        name: r.name,
+        contact: r.contact,
+        phone: r.phone,
+        email: r.email,
+        balance: parseFloat(r.balance),
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
     promotions: async (_, __, { db }) => {
@@ -299,7 +295,7 @@ export default {
           let productIds = [];
           try {
             if (r.product_ids) productIds = typeof r.product_ids === 'string' ? JSON.parse(r.product_ids) : r.product_ids;
-          } catch(e) {}
+          } catch (e) { }
           return {
             id: r.id,
             name: r.name,
@@ -313,47 +309,43 @@ export default {
             updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
           };
         });
-      } catch(err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return [];
+      } catch (err) {
+        if (err.code === 'ER_NO_SUCH_TABLE') return [];
         throw err;
       }
     },
     sales: async (_, { startDate, endDate, search }, { db }) => {
       try {
-        // 🛡️ Schema Self-Healing for Queries
-        try {
-          await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id");
-        } catch (e) { /* ignore */ }
-        
+
+
         let sql = "SELECT * FROM sales";
         let params = [];
         const conditions = [];
- 
+
         if (startDate && startDate.trim() !== "") {
-          conditions.push("DATE(created_at) >= ?");
-          params.push(startDate);
+          conditions.push("created_at >= ?");
+          params.push(startDate.includes(' ') ? startDate : `${startDate} 00:00:00`);
         }
         if (endDate && endDate.trim() !== "") {
-          const end = endDate.length <= 10 ? endDate : endDate.split('T')[0];
-          conditions.push("DATE(created_at) <= ?");
-          params.push(end);
+          conditions.push("created_at <= ?");
+          params.push(endDate.includes(' ') ? endDate : `${endDate} 23:59:59`);
         }
         if (search) {
           conditions.push("(id LIKE ? OR payment_method LIKE ?)");
           params.push(`%${search}%`, `%${search}%`);
         }
- 
+
         if (conditions.length > 0) {
           sql += " WHERE " + conditions.join(" AND ");
         }
- 
+
         sql += " ORDER BY created_at DESC LIMIT 500";
-        
+
         const [rows] = await db.query(sql, params);
-        return rows.map(r => ({ 
-          ...r, 
-          id: r.id, 
-          total: parseFloat(r.total), 
+        return rows.map(r => ({
+          ...r,
+          id: r.id,
+          total: parseFloat(r.total),
           subtotal: parseFloat(r.subtotal),
           discount: parseFloat(r.discount || 0),
           tax: parseFloat(r.tax || 0),
@@ -381,7 +373,7 @@ export default {
           createdAt: r.created_at?.toISOString(),
           updatedAt: r.updated_at?.toISOString(),
         }));
-      } catch(err) { if(err.code === 'ER_NO_SUCH_TABLE') return []; throw err; }
+      } catch (err) { if (err.code === 'ER_NO_SUCH_TABLE') return []; throw err; }
     },
     customer: async (_, { id }, { db }) => {
       try {
@@ -389,7 +381,7 @@ export default {
         if (!rows.length) return null;
         const r = rows[0];
         return { id: r.id, name: r.name, phone: r.phone, email: r.email, creditLimit: parseFloat(r.credit_limit || 0), balance: parseFloat(r.balance || 0), guarantorInfo: r.guarantor_info, lastPaymentDate: r.last_payment_date?.toISOString() || null, createdAt: r.created_at?.toISOString(), updatedAt: r.updated_at?.toISOString() };
-      } catch(err) { if(err.code === 'ER_NO_SUCH_TABLE') return null; throw err; }
+      } catch (err) { if (err.code === 'ER_NO_SUCH_TABLE') return null; throw err; }
     },
     customerPayments: async (_, { customerId }, { db }) => {
       try {
@@ -400,14 +392,14 @@ export default {
           notes: r.notes, recordedBy: r.recorded_by,
           createdAt: r.created_at?.toISOString(),
         }));
-      } catch(err) { if(err.code === 'ER_NO_SUCH_TABLE') return []; throw err; }
+      } catch (err) { if (err.code === 'ER_NO_SUCH_TABLE') return []; throw err; }
     },
     dailyDebtRecovered: async (_, __, { db }) => {
       try {
         const [rows] = await db.query("SELECT SUM(amount) as total FROM customer_payments WHERE DATE(created_at) = CURDATE()");
         return parseFloat(rows[0]?.total || 0);
-      } catch(err) {
-        if(err.code === 'ER_NO_SUCH_TABLE') return 0;
+      } catch (err) {
+        if (err.code === 'ER_NO_SUCH_TABLE') return 0;
         throw err;
       }
     },
@@ -442,6 +434,7 @@ export default {
           amount: parseFloat(r.amount),
           description: r.description,
           authorizedBy: r.authorized_by,
+          status: r.status || 'ACTIVE',
           createdAt: r.created_at?.toISOString()
         }));
       } catch (err) {
@@ -452,7 +445,6 @@ export default {
     },
     auditLogs: async (_, { startDate, endDate }, { db }) => {
       try {
-        await db.query("CREATE TABLE IF NOT EXISTS audit_logs (id VARCHAR(36) PRIMARY KEY, user_id VARCHAR(36) NOT NULL, action VARCHAR(255) NOT NULL, target VARCHAR(255) NOT NULL, old_value TEXT, new_value TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, INDEX idx_user (user_id), INDEX idx_action (action)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci");
 
         let sql = `
           SELECT al.*, u.username 
@@ -464,31 +456,30 @@ export default {
 
         if (startDate && startDate.trim() !== "") {
           conditions.push("al.created_at >= ?");
-          params.push(startDate);
+          params.push(startDate.includes(' ') ? startDate : `${startDate} 00:00:00`);
         }
         if (endDate && endDate.trim() !== "") {
-          const end = endDate.length <= 10 ? `${endDate} 23:59:59` : endDate;
           conditions.push("al.created_at <= ?");
-          params.push(end);
+          params.push(endDate.includes(' ') ? endDate : `${endDate} 23:59:59`);
         }
 
         if (conditions.length > 0) {
           sql += " WHERE " + conditions.join(" AND ");
         }
 
-        sql += " ORDER BY al.created_at DESC";
+        sql += " ORDER BY al.created_at DESC LIMIT 1000";
         const [rows] = await db.query(sql, params);
-        return rows.map(r => ({ 
-          ...r, 
-          userId: r.user_id, 
-          oldValue: r.old_value, 
-          newValue: r.new_value, 
+        return rows.map(r => ({
+          ...r,
+          userId: r.user_id,
+          oldValue: r.old_value,
+          newValue: r.new_value,
           createdAt: r.created_at?.toISOString(),
           user: r.username ? { username: r.username.split('@')[0].toUpperCase() } : { username: 'SYSTEM' }
         }));
-      } catch (err) { 
+      } catch (err) {
         console.error('auditLogs resolver error:', err);
-        return []; 
+        return [];
       }
     },
     saleReturns: async (_, { startDate, endDate }, { db }) => {
@@ -497,7 +488,7 @@ export default {
         try {
           await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by");
         } catch (e) { /* ignore */ }
-        
+
         let sql = "SELECT * FROM sale_returns";
         let params = [];
         const conditions = [];
@@ -519,18 +510,18 @@ export default {
         sql += " ORDER BY created_at DESC";
         const [rows] = await db.query(sql, params);
         return rows.map(r => ({ ...r, saleId: r.sale_id, productId: r.product_id, authorizedBy: r.authorized_by, shiftId: r.shift_id, createdAt: r.created_at?.toISOString() }));
-      } catch (err) { 
+      } catch (err) {
         console.error('saleReturns resolver error:', err);
-        return []; 
+        return [];
       }
     },
     cashierShifts: async (_, { startDate, endDate }, { db }) => {
       try {
         // 🛡️ Schema Self-Healing for Queries
         // Ensure sales and sale_returns are also healed here since shifts calculation depends on them
-        try { await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id"); } catch (e) {}
-        try { await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by"); } catch (e) {}
-        
+        try { await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id"); } catch (e) { }
+        try { await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by"); } catch (e) { }
+
         let sql = "SELECT * FROM cashier_shifts";
         let params = [];
         const conditions = [];
@@ -538,7 +529,7 @@ export default {
         if (startDate && startDate.trim() !== "") {
           const start = startDate.length <= 10 ? `${startDate} 00:00:00` : startDate;
           const end = (endDate && endDate.trim() !== "") ? (endDate.length <= 10 ? `${endDate} 23:59:59` : endDate) : start;
-          
+
           conditions.push("(start_time <= ? AND (end_time IS NULL OR end_time >= ?))");
           params.push(end, start);
         }
@@ -549,20 +540,20 @@ export default {
 
         sql += " ORDER BY start_time DESC";
         const [rows] = await db.query(sql, params);
-        return rows.map(r => ({ 
-          ...r, 
-          cashierId: r.cashier_id, 
+        return rows.map(r => ({
+          ...r,
+          cashierId: r.cashier_id,
           shiftId: r.shift_id,
-          startTime: r.start_time?.toISOString(), 
+          startTime: r.start_time?.toISOString(),
           endTime: r.end_time?.toISOString(),
           openingCash: parseFloat(r.opening_cash),
           expectedCash: parseFloat(r.expected_cash || 0),
           actualCash: parseFloat(r.actual_cash || 0),
           variance: parseFloat(r.variance || 0)
         }));
-      } catch (err) { 
+      } catch (err) {
         console.error('cashierShifts resolver error:', err);
-        return []; 
+        return [];
       }
     },
     activeShift: async (_, { cashierId }, { db }) => {
@@ -570,11 +561,11 @@ export default {
         const [rows] = await db.query("SELECT * FROM cashier_shifts WHERE cashier_id = ? AND status = 'OPEN'", [cashierId]);
         if (rows.length === 0) return null;
         const r = rows[0];
-        return { 
-          ...r, 
-          cashierId: r.cashier_id, 
-          startTime: r.start_time?.toISOString(), 
-          openingCash: parseFloat(r.opening_cash) 
+        return {
+          ...r,
+          cashierId: r.cashier_id,
+          startTime: r.start_time?.toISOString(),
+          openingCash: parseFloat(r.opening_cash)
         };
       } catch (err) { return null; }
     },
@@ -608,10 +599,10 @@ export default {
 
         const expectedCash = parseFloat(shift.opening_cash) + salesTotal + recoveryTotal - returnsTotal;
 
-        return { 
-          ...shift, 
-          id, 
-          startTime: shift.start_time?.toISOString(), 
+        return {
+          ...shift,
+          id,
+          startTime: shift.start_time?.toISOString(),
           openingCash: parseFloat(shift.opening_cash),
           expectedCash,
           recoveryTotal,
@@ -625,7 +616,7 @@ export default {
     getProfitReport: async (_, { startDate, endDate }, { db }) => {
       try {
         if (!startDate || !endDate || startDate.trim() === "" || endDate.trim() === "") {
-           return { dateTrends: [], productPerformance: [] };
+          return { dateTrends: [], productPerformance: [] };
         }
 
         // Normalize Start Date: ensure YYYY-MM-DD format (if T is present, replace with space)
@@ -713,7 +704,7 @@ export default {
           notes: r.notes, recordedBy: r.recorded_by, shiftId: r.shift_id,
           createdAt: r.created_at?.toISOString(),
         }));
-      } catch(err) { if(err.code === 'ER_NO_SUCH_TABLE') return []; throw err; }
+      } catch (err) { if (err.code === 'ER_NO_SUCH_TABLE') return []; throw err; }
     },
   },
   Expense: {
@@ -770,7 +761,7 @@ export default {
       try {
         const saleId = parent.saleId || parent.sale_id;
         const productId = parent.productId || parent.product_id;
-        
+
         if (!saleId || !productId) return 0;
 
         const [rows] = await db.query(
@@ -802,7 +793,37 @@ export default {
         for (const sql of INVENTORY_SCHEMA_SQL) {
           await db.query(sql);
         }
-        return "Inventory database initialized successfully";
+
+        // 🚀 Migration Hardening: Ensure existing terminals get the new performance indexes
+        const migrations = [
+          { table: 'audit_logs', index: 'idx_created', column: 'created_at' },
+          { table: 'sale_returns', index: 'idx_created', column: 'created_at' },
+          { table: 'cashier_shifts', index: 'idx_start', column: 'start_time' },
+          { table: 'expenses', index: 'idx_status', column: 'status' }
+        ];
+
+        for (const m of migrations) {
+          try {
+            // First ensure the column exists (for newer columns like 'status')
+            if (m.column === 'status' && m.table === 'expenses') {
+              try { 
+                await db.query(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} VARCHAR(20) DEFAULT 'ACTIVE' AFTER description`); 
+              } catch (e) { /* exists */ }
+            }
+
+            if (m.index) {
+              try {
+                await db.query(`CREATE INDEX ${m.index} ON ${m.table}(${m.column})`);
+              } catch (e) {
+                // Index likely already exists
+              }
+            }
+          } catch (e) {
+            console.error(`Migration error on ${m.table}:`, e.message);
+          }
+        }
+
+        return "Inventory database initialized and synchronized successfully";
       } catch (error) {
         throw new Error(`Failed to initialize Inventory database: ${error.message}`);
       }
@@ -811,10 +832,6 @@ export default {
       const { name, category, price, costPrice, initialStock, minStock, unit, barcode, supplierId } = args;
       const id = uuidv7();
       const finalStock = initialStock || 0;
-
-      for (const sql of INVENTORY_SCHEMA_SQL) {
-        await db.query(sql);
-      }
 
       await db.query(
         "INSERT INTO products (id, name, category, price, cost_price, stock, min_stock, unit, barcode, supplier_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -833,18 +850,18 @@ export default {
       const [rows] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
       const r = rows[0];
       return {
-          id: r.id,
-          name: r.name,
-          category: r.category,
-          price: parseFloat(r.price),
-          costPrice: parseFloat(r.cost_price),
-          stock: r.stock,
-          minStock: r.min_stock,
-          unit: r.unit,
-          barcode: r.barcode,
-          supplierId: r.supplier_id,
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        price: parseFloat(r.price),
+        costPrice: parseFloat(r.cost_price),
+        stock: r.stock,
+        minStock: r.min_stock,
+        unit: r.unit,
+        barcode: r.barcode,
+        supplierId: r.supplier_id,
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
     updateProduct: async (_, args, { db }) => {
@@ -863,21 +880,21 @@ export default {
       const [rows] = await db.query("SELECT * FROM products WHERE id = ?", [id]);
       const r = rows[0];
       return {
-          id: r.id,
-          name: r.name,
-          category: r.category,
-          price: parseFloat(r.price),
-          costPrice: parseFloat(r.cost_price),
-          stock: r.stock,
-          minStock: r.min_stock,
-          unit: r.unit,
-          barcode: r.barcode,
-          supplierId: r.supplier_id,
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        price: parseFloat(r.price),
+        costPrice: parseFloat(r.cost_price),
+        stock: r.stock,
+        minStock: r.min_stock,
+        unit: r.unit,
+        barcode: r.barcode,
+        supplierId: r.supplier_id,
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
-    adjustStock: async (_, args, { db }) => {
+    adjustStock: async (_, args, { db, user }) => {
       const { productId, quantity, type, notes } = args;
       // Adjust stock in products table
       const [productRows] = await db.query("SELECT * FROM products WHERE id = ?", [productId]);
@@ -896,21 +913,31 @@ export default {
         [txId, productId, type, quantity, product.cost_price, notes || null]
       );
 
+      // 🛡️ Forensic Audit: Stock Adjustment
+      recordAudit(
+        db, 
+        user?.id, 
+        type === 'purchase' ? 'STOCK_INJECTION' : 'STOCK_ADJUSTMENT', 
+        product.name, 
+        `Qty: ${product.stock}`, 
+        `New Qty: ${newStock} | Reason: ${notes || 'NONE'}`
+      );
+
       const [updatedRows] = await db.query("SELECT * FROM products WHERE id = ?", [productId]);
       const r = updatedRows[0];
       return {
-          id: r.id,
-          name: r.name,
-          category: r.category,
-          price: parseFloat(r.price),
-          costPrice: parseFloat(r.cost_price),
-          stock: r.stock,
-          minStock: r.min_stock,
-          unit: r.unit,
-          barcode: r.barcode,
-          supplierId: r.supplier_id,
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        id: r.id,
+        name: r.name,
+        category: r.category,
+        price: parseFloat(r.price),
+        costPrice: parseFloat(r.cost_price),
+        stock: r.stock,
+        minStock: r.min_stock,
+        unit: r.unit,
+        barcode: r.barcode,
+        supplierId: r.supplier_id,
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
     deleteProduct: async (_, { id }, { db }) => {
@@ -918,69 +945,90 @@ export default {
       await db.query("DELETE FROM products WHERE id = ?", [id]);
       return id;
     },
-    addSupplier: async (_, args, { db }) => {
+    addSupplier: async (_, args, { db, user }) => {
       const { name, contact, phone, email } = args;
       const id = uuidv7();
-
-      // Ensure tables exist natively using MyISAM self-healing
-      for (const sql of INVENTORY_SCHEMA_SQL) {
-        await db.query(sql);
-      }
 
       await db.query(
         "INSERT INTO suppliers (id, name, contact, phone, email) VALUES (?, ?, ?, ?, ?)",
         [id, name, contact || null, phone || null, email || null]
       );
 
+      // 🛡️ Forensic Audit: Supplier Onboarding
+      recordAudit(db, user?.id, 'SUPPLIER_ONBOARDED', name, null, `Contact: ${contact || 'N/A'}`);
+
       const [rows] = await db.query("SELECT * FROM suppliers WHERE id = ?", [id]);
       const r = rows[0];
       return {
-          id: r.id,
-          name: r.name,
-          contact: r.contact,
-          phone: r.phone,
-          email: r.email,
-          balance: parseFloat(r.balance),
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        id: r.id,
+        name: r.name,
+        contact: r.contact,
+        phone: r.phone,
+        email: r.email,
+        balance: parseFloat(r.balance),
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
-    updateSupplier: async (_, args, { db }) => {
+    updateSupplier: async (_, args, { db, user }) => {
       const { id, ...updates } = args;
       const fields = Object.keys(updates);
       const values = Object.values(updates);
       if (fields.length === 0) throw new Error("No fields provided for update");
 
+      const [oldRows] = await db.query("SELECT * FROM suppliers WHERE id = ?", [id]);
+      const oldSupplier = oldRows[0];
+
       const setClause = fields.map(f => `${f.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`)} = ?`).join(", ");
       await db.query(`UPDATE suppliers SET ${setClause} WHERE id = ?`, [...values, id]);
+
+      // 🛡️ Forensic Audit: Supplier Update
+      if (updates.balance !== undefined) {
+        recordAudit(
+          db, 
+          user?.id, 
+          'SUPPLIER_BALANCE_CHANGE', 
+          oldSupplier.name, 
+          `UGX ${parseFloat(oldSupplier.balance).toLocaleString()}`, 
+          `UGX ${parseFloat(updates.balance).toLocaleString()}`
+        );
+      } else {
+        recordAudit(db, user?.id, 'SUPPLIER_PROFILE_UPDATED', oldSupplier.name, 'Config updated', null);
+      }
 
       const [rows] = await db.query("SELECT * FROM suppliers WHERE id = ?", [id]);
       const r = rows[0];
       return {
-          id: r.id,
-          name: r.name,
-          contact: r.contact,
-          phone: r.phone,
-          email: r.email,
-          balance: parseFloat(r.balance),
-          createdAt: r.created_at ? r.created_at.toISOString() : null,
-          updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
+        id: r.id,
+        name: r.name,
+        contact: r.contact,
+        phone: r.phone,
+        email: r.email,
+        balance: parseFloat(r.balance),
+        createdAt: r.created_at ? r.created_at.toISOString() : null,
+        updatedAt: r.updated_at ? r.updated_at.toISOString() : null,
       };
     },
-    deleteSupplier: async (_, { id }, { db }) => {
+    deleteSupplier: async (_, { id }, { db, user }) => {
+      const [rows] = await db.query("SELECT name FROM suppliers WHERE id = ?", [id]);
+      const name = rows[0]?.name || 'Unknown Vendor';
+      
       await db.query("DELETE FROM suppliers WHERE id = ?", [id]);
+
+      // 🛡️ Forensic Audit: Supplier Deletion
+      recordAudit(db, user?.id, 'SUPPLIER_DELETED', name, null, null);
       return id;
     },
     addSale: async (_, args, { db, user }) => {
       const { total, subtotal, tax, discount, paymentMethod, customerId, cashierId, shiftId, items, promoId, promoName, clientTxId } = args;
-      
+
       // 🛡️ IDEMPOTENCY GUARD: Use Client-side ID first, fallback to content-fingerprint
-      const fingerprint = clientTxId || JSON.stringify({ 
-        items: items.map(i => ({ id: i.id, q: i.quantity })), 
-        total, 
-        cashierId 
+      const fingerprint = clientTxId || JSON.stringify({
+        items: items.map(i => ({ id: i.id, q: i.quantity })),
+        total,
+        cashierId
       });
-      
+
       const existingResult = recentSalesCache.get(fingerprint);
       if (existingResult) {
         console.log(`[resolvers] Duplicate sale detected for fingerprint. Returning cached result.`);
@@ -993,13 +1041,13 @@ export default {
       // ALTER TABLE causes implicit commit in MySQL, must never be inside a transaction
       try {
         await db.query("ALTER TABLE sales ADD COLUMN promo_id TEXT AFTER cashier_id");
-      } catch (e) { 
-        try { await db.query("ALTER TABLE sales MODIFY COLUMN promo_id TEXT"); } catch(ee) {}
+      } catch (e) {
+        try { await db.query("ALTER TABLE sales MODIFY COLUMN promo_id TEXT"); } catch (ee) { }
       }
       try {
         await db.query("ALTER TABLE sales ADD COLUMN promo_name VARCHAR(512) AFTER promo_id");
-      } catch (e) { 
-        try { await db.query("ALTER TABLE sales MODIFY COLUMN promo_name VARCHAR(512)"); } catch(ee) {}
+      } catch (e) {
+        try { await db.query("ALTER TABLE sales MODIFY COLUMN promo_name VARCHAR(512)"); } catch (ee) { }
       }
       try {
         await db.query("ALTER TABLE sale_items ADD COLUMN remaining_stock INT AFTER unit_cost");
@@ -1086,7 +1134,7 @@ export default {
               "UPDATE customers SET balance = balance + ?, updated_at = NOW() WHERE id = ?",
               [total, customerId]
             );
-          } catch(err) {
+          } catch (err) {
             // customers table may not exist yet — non-fatal
             console.warn('[addSale] Could not update customer balance:', err.message);
           }
@@ -1123,7 +1171,7 @@ export default {
 
         // 🚀 TRIGGER INSTITUTIONAL EMAIL NOTIFICATION (ASYNC)
         notifySaleToAdmin(db, result).catch(err => console.error("[resolvers] Notify error:", err));
-        
+
         return result;
 
       } catch (error) {
@@ -1136,7 +1184,7 @@ export default {
     addCustomer: async (_, args, { db }) => {
       const { name, phone, email, creditLimit, guarantorInfo } = args;
       const id = uuidv7();
-      for (const sql of INVENTORY_SCHEMA_SQL) { try { await db.query(sql); } catch(e) {} }
+      for (const sql of INVENTORY_SCHEMA_SQL) { try { await db.query(sql); } catch (e) { } }
       await db.query(
         "INSERT INTO customers (id, name, phone, email, credit_limit, guarantor_info) VALUES (?, ?, ?, ?, ?, ?)",
         [id, name, phone || null, email || null, creditLimit || 0, guarantorInfo || null]
@@ -1177,10 +1225,21 @@ export default {
         [paymentId, customerId, amount, paymentMethod || 'cash', reference || null, notes || null, recordedBy, shiftId || null]
       );
 
-      // Reduce customer outstanding balance
       await db.query(
         "UPDATE customers SET balance = GREATEST(0, balance - ?), last_payment_date = NOW(), updated_at = NOW() WHERE id = ?",
         [amount, customerId]
+      );
+
+      // 🛡️ Forensic Audit: Debt Repayment
+      const [cusRows] = await db.query("SELECT name, balance FROM customers WHERE id = ?", [customerId]);
+      const customer = cusRows[0];
+      recordAudit(
+        db, 
+        user?.id, 
+        'CREDIT_REPAYMENT', 
+        customer.name, 
+        `UGX ${amount.toLocaleString()} RECEIVED`, 
+        `New Balance: UGX ${parseFloat(customer.balance).toLocaleString()}`
       );
 
       const [rows] = await db.query("SELECT * FROM customer_payments WHERE id = ?", [paymentId]);
@@ -1201,6 +1260,17 @@ export default {
 
       // 3. Delete the payment record
       await db.query("DELETE FROM customer_payments WHERE id = ?", [id]);
+
+      // 🛡️ Forensic Audit: Payment Reversal
+      const [cusRows] = await db.query("SELECT name, balance FROM customers WHERE id = ?", [payment.customer_id]);
+      recordAudit(
+        db, 
+        'SYSTEM_AUTOPILOT', 
+        'DEBT_PAYMENT_REVERSED', 
+        cusRows[0]?.name || 'Unknown', 
+        `UGX ${parseFloat(payment.amount).toLocaleString()} REMOVED`, 
+        `Debt Reinstated | Current: UGX ${parseFloat(cusRows[0]?.balance).toLocaleString()}`
+      );
 
       return true;
     },
@@ -1231,9 +1301,8 @@ export default {
         createdAt: r.created_at?.toISOString()
       };
     },
-    deleteExpense: async (_, { id }, { db }) => {
-      await db.query("DELETE FROM expenses WHERE id = ?", [id]);
-      return id;
+    deleteExpense: async () => {
+      throw new Error("LEDGER_SECURITY_VIOLATION: PHYSICAL_DELETION_IS_PROHIBITED. USE_VOID_PROTOCOL_INSTEAD.");
     },
     updateExpense: async (_, args, { db }) => {
       const { id, ...updates } = args;
@@ -1261,6 +1330,7 @@ export default {
         description: r.description,
         date: r.date instanceof Date ? r.date.toISOString() : (r.date || new Date().toISOString()),
         authorizedBy: r.authorized_by,
+        status: r.status || 'ACTIVE',
         createdAt: r.created_at?.toISOString(),
         updatedAt: r.updated_at?.toISOString()
       };
@@ -1282,12 +1352,12 @@ export default {
       const returnDate = date || new Date().toISOString();
 
       const connection = await db.getConnection();
-      
+
       // 🛡️ Schema Self-Healing for Returns
       try {
         await connection.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by");
       } catch (e) { /* ignore if column exists */ }
-      
+
       await connection.beginTransaction();
       try {
         // 0. Fetch Sale details for balance reconciliation
@@ -1318,7 +1388,7 @@ export default {
         );
 
         await connection.commit();
-        
+
         // 🛡️ Audit: Sales Return
         recordAudit(db, authorizedBy, 'SALE_RETURN', productId, `Qty: ${quantity} on Sale #${saleId}`, `Refund: ${amount} UGX | Date: ${new Date(returnDate).toLocaleDateString()} | Reason: ${reason}`);
 
@@ -1333,7 +1403,7 @@ export default {
     addPromotion: async (_, args, { db, user }) => {
       const { name, type, value, startDate, endDate, productIds } = args;
       const id = uuidv7();
-      
+
       try {
         // Self-heal: ensure table exists before inserting
         await db.query(`
@@ -1357,7 +1427,7 @@ export default {
         const toMySQLDate = (iso) => {
           const d = new Date(iso);
           const pad = (n) => String(n).padStart(2, '0');
-          return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
         };
 
         await db.query(
@@ -1369,7 +1439,7 @@ export default {
         recordAudit(db, user?.id, 'CREATE_PROMOTION', name, null, `Type: ${type}, Value: ${value}`);
 
         return { id, name, type, value, startDate, endDate, isActive: true, productIds: productIds || [] };
-      } catch(err) {
+      } catch (err) {
         throw new Error("Failed to add promotion: " + err.message);
       }
     },
@@ -1380,7 +1450,7 @@ export default {
       const toMySQLDate = (iso) => {
         const d = new Date(iso);
         const pad = (n) => String(n).padStart(2, '0');
-        return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
       };
 
       if (name !== undefined) { updates.push("name = ?"); params.push(name); }
@@ -1390,7 +1460,7 @@ export default {
       if (endDate !== undefined) { updates.push("end_date = ?"); params.push(toMySQLDate(endDate)); }
       if (isActive !== undefined) { updates.push("is_active = ?"); params.push(isActive ? 1 : 0); }
       if (productIds !== undefined) { updates.push("product_ids = ?"); params.push(JSON.stringify(productIds)); }
-      
+
       const [oldRows] = await db.query("SELECT * FROM promotions WHERE id = ?", [id]);
       if (oldRows.length === 0) throw new Error("Promotion not found");
       const oldPromo = oldRows[0];
@@ -1399,7 +1469,7 @@ export default {
         params.push(id);
         await db.query(`UPDATE promotions SET ${updates.join(", ")} WHERE id = ?`, params);
       }
-      
+
       const [rows] = await db.query("SELECT * FROM promotions WHERE id = ?", [id]);
       const r = rows[0];
 
@@ -1422,12 +1492,12 @@ export default {
       // Fetch name for audit before delete
       const [rows] = await db.query("SELECT name FROM promotions WHERE id = ?", [id]);
       const name = rows[0]?.name || 'Unknown Promo';
-      
+
       await db.query("DELETE FROM promotions WHERE id = ?", [id]);
-      
-        // 🛡️ Audit
+
+      // 🛡️ Audit
       recordAudit(db, user?.id, 'DELETE_PROMOTION', name, null, null);
-      
+
       return id;
     },
     togglePromotion: async (_, { id }, { db, user }) => {
@@ -1458,7 +1528,7 @@ export default {
       const [shiftRows] = await db.query("SELECT * FROM cashier_shifts WHERE id = ?", [id]);
       if (shiftRows.length === 0) throw new Error("Shift not found");
       const shift = shiftRows[0];
-      
+
       // 💰 TOTAL SALES: Strict ID Match (No more time guessing)
       const [salesRows] = await db.query(
         "SELECT SUM(total) as total FROM sales WHERE shift_id = ? AND payment_method = 'cash'",
@@ -1504,19 +1574,19 @@ export default {
         "UPDATE cashier_shifts SET end_time = NOW(), expected_cash = ?, actual_cash = ?, variance = ?, status = 'CLOSED' WHERE id = ?",
         [expectedCash, actualCash, variance, id]
       );
-      
-      return { 
-        ...shift, 
-        id, 
-        endTime: new Date().toISOString(), 
-        expectedCash, 
-        actualCash, 
-        variance, 
+
+      return {
+        ...shift,
+        id,
+        endTime: new Date().toISOString(),
+        expectedCash,
+        actualCash,
+        variance,
         digitalTotal,
         creditTotal,
         recoveryTotal,
         refundsTotal: returnsTotal,
-        status: 'CLOSED' 
+        status: 'CLOSED'
       };
     }
   }

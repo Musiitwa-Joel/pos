@@ -4,18 +4,27 @@ import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
 import { randomUUID } from "crypto";
 import { provisionInstitution } from "../../utils/provisioner.js";
+import sharp from "sharp";
+import path from "path";
+import fs from "fs/promises";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
 const USER_SCHEMA_SQL = [
     `CREATE TABLE IF NOT EXISTS users (
     id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(255),
     username VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255),
-    role ENUM('admin', 'manager', 'cashier', 'staff') DEFAULT 'staff',
+    role VARCHAR(100) DEFAULT 'PENDING_ASSIGNMENT',
     employee_id VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
+    authorized_modules TEXT,
+    profile_picture VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_username (username),
@@ -36,31 +45,100 @@ export default {
     Query: {
         me: async (_, __, { db, user }) => {
             if (!user) return null;
-            const [rows] = await db.query("SELECT * FROM users WHERE id = ?", [user.id]);
+            // 🛡️ Deep Identity Bridge: Joint lookup across users, employees, and roles
+            const [rows] = await db.query(`
+                SELECT 
+                    u.*, 
+                    e.role as employee_role,
+                    r.authorized_modules as primary_role_modules,
+                    er.authorized_modules as fallback_role_modules
+                FROM users u 
+                LEFT JOIN employees e ON u.employee_id = e.id 
+                LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
+                LEFT JOIN roles er ON LOWER(e.role) = LOWER(er.name)
+                WHERE u.id = ?`, [user.id]).catch(async (err) => {
+                    if (err.message.includes("profile_picture")) {
+                        // Fallback: Fetch without the new column during transition
+                        return db.query(`
+                            SELECT 
+                                u.id, u.username, u.role, u.employee_id, u.is_active, u.authorized_modules, u.created_at, u.updated_at,
+                                e.role as employee_role,
+                                r.authorized_modules as primary_role_modules,
+                                er.authorized_modules as fallback_role_modules
+                            FROM users u 
+                            LEFT JOIN employees e ON u.employee_id = e.id 
+                            LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
+                            LEFT JOIN roles er ON LOWER(e.role) = LOWER(er.name)
+                            WHERE u.id = ?`, [user.id]);
+                    }
+                    throw err;
+                });
             if (rows.length === 0) return null;
             const dbUser = rows[0];
+            
+            // 📡 Modular Union Protocol: Combine primary, fallback, and override permissions
+            let modules = [];
+            try {
+                const primaryModules = dbUser.primary_role_modules ? JSON.parse(dbUser.primary_role_modules) : [];
+                const fallbackModules = dbUser.fallback_role_modules ? JSON.parse(dbUser.fallback_role_modules) : [];
+                const userOverrides = dbUser.authorized_modules ? JSON.parse(dbUser.authorized_modules) : [];
+                
+                // Use primary role modules, otherwise fallback to employee assignment
+                const baseModules = primaryModules.length > 0 ? primaryModules : fallbackModules;
+                modules = [...new Set([...baseModules, ...userOverrides])];
+            } catch (e) {
+                console.error("Failed to parse module permissions:", e);
+            }
+
             return {
                 id: dbUser.id,
                 username: dbUser.username,
-                role: dbUser.role,
+                role: dbUser.role || dbUser.employee_role || 'staff',
                 isActive: dbUser.is_active,
                 employeeId: dbUser.employee_id,
                 tenantStatus: user.tenantStatus || 'active',
+                authorizedModules: modules,
+                profilePicture: dbUser.profile_picture,
                 createdAt: dbUser.created_at?.toISOString(),
                 updatedAt: dbUser.updated_at?.toISOString()
             };
         },
         users: async (_, __, { db }) => {
-            const [rows] = await db.query("SELECT * FROM users");
-            return rows.map(row => ({
-                id: row.id,
-                username: row.username,
-                role: row.role,
-                isActive: row.is_active,
-                employeeId: row.employee_id,
-                createdAt: row.created_at?.toISOString(),
-                updatedAt: row.updated_at?.toISOString()
-            }));
+            const [rows] = await db.query(`
+                SELECT u.*, r.authorized_modules as role_modules 
+                FROM users u 
+                LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name)`
+            ).catch(async (err) => {
+                if (err.message.includes("profile_picture")) {
+                    return db.query(`
+                        SELECT u.id, u.username, u.role, u.employee_id, u.is_active, u.authorized_modules, u.created_at, u.updated_at,
+                        r.authorized_modules as role_modules 
+                        FROM users u 
+                        LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name)`);
+                }
+                throw err;
+            });
+            return rows.map(dbUser => {
+                let modules = [];
+                try {
+                    const roleModules = dbUser.role_modules ? JSON.parse(dbUser.role_modules) : [];
+                    const userModules = dbUser.authorized_modules ? JSON.parse(dbUser.authorized_modules) : [];
+                    modules = [...new Set([...roleModules, ...userModules])];
+                } catch (e) {}
+
+                return {
+                    id: dbUser.id,
+                    username: dbUser.username,
+                    role: dbUser.role,
+                    isActive: dbUser.is_active,
+                    employeeId: dbUser.employee_id,
+                    employeeId: dbUser.employee_id,
+                    authorizedModules: modules,
+                    profilePicture: dbUser.profile_picture,
+                    createdAt: dbUser.created_at?.toISOString(),
+                    updatedAt: dbUser.updated_at?.toISOString()
+                };
+            });
         },
     },
     Mutation: {
@@ -122,9 +200,17 @@ export default {
             const targetPool = getTenantPool(targetDbName);
 
             const query = `
-                SELECT u.*, e.name as display_name, e.status as employment_status
+                SELECT 
+                    u.*, 
+                    e.name as display_name, 
+                    e.status as employment_status,
+                    e.role as employee_role,
+                    r.authorized_modules as primary_role_modules,
+                    er.authorized_modules as fallback_role_modules
                 FROM \`${targetDbName}\`.users u 
                 LEFT JOIN \`${targetDbName}\`.employees e ON u.employee_id = e.id 
+                LEFT JOIN \`${targetDbName}\`.roles r ON LOWER(u.role) = LOWER(r.name) 
+                LEFT JOIN \`${targetDbName}\`.roles er ON LOWER(e.role) = LOWER(er.name)
                 WHERE u.username = ? OR u.id = ? OR u.email = ?
             `;
             const [userRows] = await targetPool.query(query, [username.toLowerCase(), username, username.toLowerCase()]);
@@ -145,19 +231,32 @@ export default {
             const isValid = await bcrypt.compare(password, user.password_hash);
             if (!isValid) throw new Error("Invalid Security Key (Password)");
 
-            // Session lasts 12 hours
+            // Calculate initial modules for flicker-free login
+            let initialModules = [];
+            try {
+                const primary = user.primary_role_modules ? JSON.parse(user.primary_role_modules) : [];
+                const fallback = user.fallback_role_modules ? JSON.parse(user.fallback_role_modules) : [];
+                const overrides = user.authorized_modules ? JSON.parse(user.authorized_modules) : [];
+                const base = primary.length > 0 ? primary : fallback;
+                initialModules = [...new Set([...base, ...overrides])];
+            } catch (e) {
+                console.error("Token module calculation failure:", e);
+            }
+
+            // Session lasts 24 hours for institutional stability
             const token = jwt.sign(
                 {
                     id: user.id,
                     username: user.username,
-                    role: user.role,
+                    role: user.role || user.employee_role || 'staff',
+                    authorizedModules: initialModules,
                     tenantId: tenant ? tenant.id : null,
                     tenantStatus: tenant ? tenant.status : 'active',
                     dbName: targetDbName,
                     name: user.display_name || user.username
                 },
                 PRIVATE_KEY,
-                { expiresIn: "12h" }
+                { expiresIn: "24h" }
             );
 
             return token;
@@ -243,18 +342,28 @@ export default {
                 // Connect to the specific institutional database
                 const tenantPool = getTenantPool(targetDb);
 
-                // Find user in the specific database
-                let [userRows] = await tenantPool.query(
-                    "SELECT u.*, e.name as display_name FROM users u LEFT JOIN employees e ON u.employee_id = e.id WHERE u.email = ? OR u.username = ?",
+                // 🛡️ Deep Identity Bridge: Joint lookup for federated token hydration
+                let [userRows] = await tenantPool.query(`
+                    SELECT 
+                        u.*, 
+                        e.name as display_name,
+                        e.role as employee_role,
+                        r.authorized_modules as primary_role_modules,
+                        er.authorized_modules as fallback_role_modules
+                    FROM users u 
+                    LEFT JOIN employees e ON u.employee_id = e.id 
+                    LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
+                    LEFT JOIN roles er ON LOWER(e.role) = LOWER(er.name)
+                    WHERE u.email = ? OR u.username = ?`,
                     [normalizedEmail, normalizedEmail]
                 );
 
                 if (userRows.length === 0) {
                     if (tenant) {
-                        // Provision staff account in existing tenant
+                        // Provision account in existing tenant - Role remains NULL until assigned in HR
                         const newUserId = randomUUID();
                         await tenantPool.query(
-                            "INSERT INTO users (id, username, email, role) VALUES (?, ?, ?, 'staff')",
+                            "INSERT INTO users (id, username, email) VALUES (?, ?, ?)",
                             [newUserId, normalizedEmail, normalizedEmail]
                         );
 
@@ -276,12 +385,25 @@ export default {
                     user = userRows[0];
                 }
 
+                // Calculate initial modules for flicker-free login
+                let initialModules = [];
+                try {
+                    const primary = user.primary_role_modules ? JSON.parse(user.primary_role_modules) : [];
+                    const fallback = user.fallback_role_modules ? JSON.parse(user.fallback_role_modules) : [];
+                    const overrides = user.authorized_modules ? JSON.parse(user.authorized_modules) : [];
+                    const base = primary.length > 0 ? primary : fallback;
+                    initialModules = [...new Set([...base, ...overrides])];
+                } catch (e) {
+                    console.error("Federated token module calculation failure:", e);
+                }
+
                 // Generate HSM v2.4 Institutional JWT
                 const token = jwt.sign(
                     {
                         id: user.id,
                         username: user.username,
-                        role: user.role,
+                        role: user.role || user.employee_role || 'staff',
+                        authorizedModules: initialModules,
                         name: user.display_name || name || user.username,
                         tenantId: tenant?.id || null,
                         tenantStatus: tenant?.status || 'active',
@@ -289,7 +411,7 @@ export default {
                         needsOnboarding: !tenant
                     },
                     PRIVATE_KEY,
-                    { expiresIn: "12h" }
+                    { expiresIn: "24h" }
                 );
 
                 return token;
@@ -343,6 +465,13 @@ export default {
         },
         initializeUserDatabase: async (_, __, { db }) => {
             try {
+                // Ensure profile_picture column exists (Forensic Migration)
+                try {
+                    await db.query("ALTER TABLE users ADD COLUMN profile_picture VARCHAR(255) AFTER authorized_modules");
+                } catch (e) {
+                    // Ignore if column already exists
+                }
+
                 for (const sql of USER_SCHEMA_SQL) {
                     await db.query(sql);
                 }
@@ -350,6 +479,61 @@ export default {
             } catch (error) {
                 throw new Error(`Failed to initialize user database: ${error.message}`);
             }
+        },
+        updateProfilePicture: async (_, { file }, { db, user }) => {
+            if (!user) throw new Error("UNAUTHORIZED: Identity required for avatar uplink.");
+
+            // 🛡️ [Atomic Schema Healing] Ensure column existence before persistence
+            try {
+                // Ensure we are operating on the correct tenant database
+                await db.query(`ALTER TABLE users ADD COLUMN profile_picture VARCHAR(255) AFTER authorized_modules`);
+                console.log("[TredPOS Migration] Profile picture column provisioned successfully.");
+            } catch (e) {
+                if (!e.message.includes("Duplicate column name")) {
+                    console.error("[TredPOS Migration Failure] Could not provision column:", e.message);
+                }
+            }
+
+            const { createReadStream, filename, mimetype } = await file;
+
+            if (!mimetype || !mimetype.startsWith('image/')) {
+                throw new Error("SECURITY_VIOLATION: Only high-integrity image payloads are authorized.");
+            }
+
+            const extension = path.extname(filename) || '.jpg';
+            const storedFileName = `${user.id}-${Date.now()}${extension}`;
+            const uploadsDir = path.join(__dirname, "../../uploads/avatars");
+            const filePath = path.join(uploadsDir, storedFileName);
+
+            // 🚀 [Vanguard Optimization] Stream & Circular Compress
+            const stream = createReadStream();
+            const chunks = [];
+            for await (const chunk of stream) {
+                chunks.push(chunk);
+            }
+            const buffer = Buffer.concat(chunks);
+
+            await sharp(buffer)
+                .resize(200, 200, { fit: 'cover' })
+                .toFile(filePath);
+
+            const publicUrl = `/uploads/avatars/${storedFileName}`;
+
+            // Persist to institutional database
+            await db.query("UPDATE users SET profile_picture = ? WHERE id = ?", [publicUrl, user.id]);
+
+            // Return hydrated user identity
+            const [rows] = await db.query("SELECT * FROM users WHERE id = ?", [user.id]);
+            const updatedUser = rows[0];
+
+            return {
+                id: updatedUser.id,
+                username: updatedUser.username,
+                role: updatedUser.role,
+                profilePicture: updatedUser.profile_picture,
+                isActive: updatedUser.is_active,
+                employeeId: updatedUser.employee_id
+            };
         },
     }
 };

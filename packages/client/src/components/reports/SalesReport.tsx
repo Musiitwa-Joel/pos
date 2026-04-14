@@ -21,7 +21,7 @@ interface SalesReportProps {
   onSearchChange: (query: string) => void;
 }
 
-export default function SalesReport({ type, salesSummary, productStats, searchQuery, onSearchChange }: SalesReportProps) {
+export default React.memo(function SalesReport({ type, salesSummary, productStats, searchQuery, onSearchChange }: SalesReportProps) {
   const byMethodData = useMemo(() => 
     Object.entries(salesSummary.byMethod).map(([k, v]) => ({ name: k.toUpperCase(), value: v })),
     [salesSummary.byMethod]
@@ -195,4 +195,4 @@ export default function SalesReport({ type, salesSummary, productStats, searchQu
       </div>
     </div>
   );
-}
+})

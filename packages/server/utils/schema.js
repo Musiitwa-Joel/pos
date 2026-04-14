@@ -8,7 +8,8 @@ export const INVENTORY_SCHEMA_SQL = [
       email VARCHAR(255),
       balance DECIMAL(15,2) DEFAULT 0.00,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_name (name)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
   `
@@ -60,7 +61,9 @@ export const INVENTORY_SCHEMA_SQL = [
       promo_name VARCHAR(255),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_created_at (created_at),
-      INDEX idx_shift (shift_id)
+      INDEX idx_shift (shift_id),
+      INDEX idx_cashier (cashier_id),
+      INDEX idx_customer (customer_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
   `
@@ -88,7 +91,8 @@ export const INVENTORY_SCHEMA_SQL = [
       last_payment_date DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      INDEX idx_name (name)
+      INDEX idx_name (name),
+      INDEX idx_phone (phone)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
   `
@@ -112,6 +116,7 @@ export const INVENTORY_SCHEMA_SQL = [
       category VARCHAR(100) NOT NULL,
       amount DECIMAL(15,2) NOT NULL,
       description TEXT,
+      status VARCHAR(20) DEFAULT 'ACTIVE',
       authorized_by VARCHAR(36),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -129,7 +134,8 @@ export const INVENTORY_SCHEMA_SQL = [
         new_value TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         INDEX idx_user (user_id),
-        INDEX idx_action (action)
+        INDEX idx_action (action),
+        INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
   `,
   `
@@ -144,7 +150,8 @@ export const INVENTORY_SCHEMA_SQL = [
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sale_id) REFERENCES sales(id),
         INDEX idx_sale (sale_id),
-        INDEX idx_product (product_id)
+        INDEX idx_product (product_id),
+        INDEX idx_created (created_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
   `
@@ -159,7 +166,8 @@ export const INVENTORY_SCHEMA_SQL = [
         variance DECIMAL(15,2),
         status VARCHAR(20) DEFAULT 'OPEN',
         INDEX idx_cashier (cashier_id),
-        INDEX idx_status (status)
+        INDEX idx_status (status),
+        INDEX idx_start (start_time)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
   `

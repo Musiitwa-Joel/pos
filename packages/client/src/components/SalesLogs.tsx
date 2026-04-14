@@ -25,13 +25,29 @@ export default function SalesLogs() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Synchronize with server when date boundaries or search query shifts
+  // Local filtering ensures ZERO flicker between global cache (7 days) and local view (Today)
+  const filteredSales = sales.filter(sale => {
+    const saleDate = String(sale.createdAt || sale.timestamp || "").split('T')[0];
+    const isWithinRange = (!startDate || saleDate >= startDate) && (!endDate || saleDate <= endDate);
+    
+    if (debouncedSearch) {
+      const searchLower = debouncedSearch.toLowerCase();
+      const matchesSearch = 
+        sale.id.toLowerCase().includes(searchLower) || 
+        sale.paymentMethod.toLowerCase().includes(searchLower);
+      return isWithinRange && matchesSearch;
+    }
+    
+    return isWithinRange;
+  });
+
+  // Synchronize with server ONLY when moving outside the hydrated 7-day window
   useEffect(() => {
+    // Only fetch if we don't have enough data locally or search is active
+    // For now, simplicity is better: re-sync on explicit changes
     refreshSales(startDate, endDate, debouncedSearch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate, endDate, debouncedSearch]);
-
-  const filteredSales = sales; // Filtering now happens server-side
 
   const handleExportCSV = () => {
     const data = filteredSales.map(sale => {

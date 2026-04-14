@@ -98,6 +98,7 @@ export interface Expense {
   category: string;
   amount: number;
   description: string;
+  status: 'ACTIVE' | 'VOIDED';
   authorizedBy?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -119,10 +120,12 @@ export interface User {
   id: string;
   username: string;
   name: string;
-  role: 'admin' | 'manager' | 'cashier' | 'staff' | 'hq-ceo';
+  role: 'ADMIN' | 'admin' | 'MANAGER' | 'CASHIER' | 'STAFF' | 'staff' | 'hq-ceo';
   employeeId?: string;
+  profilePicture?: string;
   tenantStatus?: string;
   isActive?: boolean;
+  authorizedModules?: string[];
   createdAt?: string;
   updatedAt?: string;
 }
@@ -154,6 +157,7 @@ export interface Role {
   id: string;
   name: string;
   description?: string;
+  authorizedModules?: string[];
 }
 
 export interface AttendanceRecord {

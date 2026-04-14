@@ -10,6 +10,7 @@ const SETTINGS_SCHEMA_SQL = [
     id VARCHAR(50) PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
+    authorized_modules TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=MyISAM`
 ];
@@ -28,7 +29,10 @@ export default {
         },
         roles: async (_, __, { db }) => {
             const [rows] = await db.query("SELECT * FROM roles ORDER BY name ASC");
-            return rows;
+            return rows.map(row => ({
+                ...row,
+                authorizedModules: row.authorized_modules ? JSON.parse(row.authorized_modules) : []
+            }));
         },
         getSystemTelemetry: async () => {
             const os = await import("os");
@@ -70,16 +74,17 @@ export default {
 
             return { key, value };
         },
-        addRole: async (_, { name, description }, { db, logUserAction, user }) => {
+        addRole: async (_, { name, description, authorizedModules }, { db, logUserAction, user }) => {
             // Self-healing check
             for (const sql of SETTINGS_SCHEMA_SQL) {
                 await db.query(sql);
             }
 
             const id = uuidv7();
+            const modulesJson = authorizedModules ? JSON.stringify(authorizedModules) : null;
             await db.query(
-                "INSERT INTO roles (id, name, description) VALUES (?, ?, ?)",
-                [id, name, description]
+                "INSERT INTO roles (id, name, description, authorized_modules) VALUES (?, ?, ?, ?)",
+                [id, name, description, modulesJson]
             );
 
             if (logUserAction) {
@@ -90,12 +95,48 @@ export default {
                 });
             }
 
-            return { id, name, description };
+            return { id, name, description, authorizedModules };
+        },
+        updateRole: async (_, { id, name, description, authorizedModules }, { db, logUserAction, user }) => {
+            const [rows] = await db.query("SELECT * FROM roles WHERE id = ?", [id]);
+            if (rows.length === 0) throw new Error("Role not found");
+
+            const updates = [];
+            const values = [];
+
+            if (name !== undefined) { updates.push("name = ?"); values.push(name); }
+            if (description !== undefined) { updates.push("description = ?"); values.push(description); }
+            if (authorizedModules !== undefined) { updates.push("authorized_modules = ?"); values.push(JSON.stringify(authorizedModules)); }
+
+            if (updates.length > 0) {
+                values.push(id);
+                await db.query(`UPDATE roles SET ${updates.join(", ")} WHERE id = ?`, values);
+            }
+
+            if (logUserAction) {
+                await logUserAction({
+                    action: "ROLE_UPDATED",
+                    details: `Updated staff role: ${name || rows[0].name}`,
+                    context: { user }
+                });
+            }
+
+            const [updatedRows] = await db.query("SELECT * FROM roles WHERE id = ?", [id]);
+            const r = updatedRows[0];
+            return {
+                ...r,
+                authorizedModules: r.authorized_modules ? JSON.parse(r.authorized_modules) : []
+            };
         },
         deleteRole: async (_, { id }, { db, logUserAction, user }) => {
             const [rows] = await db.query("SELECT name FROM roles WHERE id = ?", [id]);
             if (rows.length === 0) return false;
             const roleName = rows[0].name;
+
+            // 🛡️ Security Shield: Protect the root administrative layer
+            if (id === 'admin' || roleName.toUpperCase() === 'ADMIN') {
+                throw new Error("UNAUTHORIZED_OPERATION: ROOT_ADMIN_ROLE_IS_PROTECTED_AND_CANNOT_BE_DELETED");
+            }
 
             await db.query("DELETE FROM roles WHERE id = ?", [id]);
 

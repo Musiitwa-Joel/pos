@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { flushSync } from "react-dom";
 import {
   LayoutGrid,
@@ -30,30 +30,30 @@ import { useHardware } from "./HardwareContext";
 import { cn } from "./lib/utils";
 import { toast } from "sonner";
 import TopLoader from "./components/TopLoader";
+import { API_BASE_URL } from "./HardwareContext";
 
-// Components
-import Dashboard from "./components/Dashboard";
-import POS from "./components/POS";
-import Inventory from "./components/Inventory";
-import CreditManagement from "./components/CreditManagement";
-import SalesLogs from "./components/SalesLogs";
-import Suppliers from "./components/Suppliers";
-import Expenses from "./components/Expenses";
-import HRModule from "./components/HRModule";
-import SettingsView from "./components/SettingsView";
-import Reports from "./components/Reports";
-import ReturnsManagement from "./components/ReturnsManagement";
-import BrandedLoader from "./components/BrandedLoader";
+// 🏗️ Deferred Module Loading (Code Splitting)
+const Dashboard = React.lazy(() => import("./components/Dashboard"));
+const POS = React.lazy(() => import("./components/POS"));
+const Inventory = React.lazy(() => import("./components/Inventory"));
+const CreditManagement = React.lazy(() => import("./components/CreditManagement"));
+const SalesLogs = React.lazy(() => import("./components/SalesLogs"));
+const Suppliers = React.lazy(() => import("./components/Suppliers"));
+const Expenses = React.lazy(() => import("./components/Expenses"));
+const HRModule = React.lazy(() => import("./components/HRModule"));
+const SettingsView = React.lazy(() => import("./components/SettingsView"));
+const Reports = React.lazy(() => import("./components/Reports"));
+const ReturnsManagement = React.lazy(() => import("./components/ReturnsManagement"));
 
-// 👑 HQ Modules
-import BillingHub from "./components/hq/BillingHub";
-import InstitutionRegistry from "./components/hq/InstitutionRegistry";
-import WebsiteManager from "./components/hq/WebsiteManager";
-import GlobalReports from "./components/hq/GlobalReports";
-import SystemAudit from "./components/hq/SystemAudit";
-import InstitutionalReports from "./components/hq/InstitutionalReports";
-import InfrastructureHub from "./components/hq/InfrastructureHub";
+// 👑 HQ Modules (Deferred)
+const BillingHub = React.lazy(() => import("./components/hq/BillingHub"));
+const InstitutionRegistry = React.lazy(() => import("./components/hq/InstitutionRegistry"));
+const WebsiteManager = React.lazy(() => import("./components/hq/WebsiteManager"));
+const GlobalReports = React.lazy(() => import("./components/hq/GlobalReports"));
+const SystemAudit = React.lazy(() => import("./components/hq/SystemAudit"));
+const InfrastructureHub = React.lazy(() => import("./components/hq/InfrastructureHub"));
 import SuspensionOverlay from "./components/auth/SuspensionOverlay";
+import LogoLoader from "./components/LogoLoader";
 
 type View =
   | "dashboard"
@@ -132,10 +132,12 @@ export default function AppShell() {
     currentUser,
     logout,
     loading,
+    loadingStatus,
     settings,
     refreshInventory,
     refreshEmployees,
     refreshSuppliers,
+    updateProfilePicture,
   } = useHardware();
 
   // 🔒 Institutional Suspension Enforcement
@@ -161,6 +163,15 @@ export default function AppShell() {
   const [commandQuery, setCommandQuery] = useState("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarUpdate = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      updateProfilePicture(file);
+      e.target.value = '';
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -200,52 +211,76 @@ export default function AppShell() {
   }, [isLightMode]);
 
   // 🏷️ Dynamic Institutional Navigation
-  const navItems = isHqCeo
-    ? [
-        {
-          id: "billing",
-          label: "Collections HQ",
-          icon: LayoutGrid,
-          shortcut: "C",
-        },
-        {
-          id: "institutions",
-          label: "B2B Registry",
-          icon: Globe,
-          shortcut: "I",
-        },
-        { id: "website", label: "Manage Website", icon: Zap, shortcut: "W" },
-        {
-          id: "global_reports",
-          label: "Global Reports",
-          icon: BarChart3,
-          shortcut: "R",
-        },
-        { id: "audit", label: "Security Logs", icon: Receipt, shortcut: "A" },
-        {
-          id: "settings",
-          label: "Global Config",
-          icon: SettingsIcon,
-          shortcut: "G",
-        },
-      ]
-    : [
-        {
-          id: "dashboard",
-          label: "Intelligence",
-          icon: LayoutDashboard,
-          shortcut: "R",
-        },
-        { id: "pos", label: "Terminal", icon: ShoppingCart, shortcut: "P" },
-        { id: "inventory", label: "Inventory", icon: Package, shortcut: "I" },
-        { id: "credit", label: "Credit", icon: Users, shortcut: "U" },
-        { id: "hr", label: "Human Resources", icon: UserCog, shortcut: "H" },
-        { id: "sales", label: "Audit", icon: Receipt, shortcut: "L" },
-        { id: "reports", label: "Analytics", icon: BarChart3, shortcut: "B" },
-        { id: "suppliers", label: "Suppliers", icon: Truck, shortcut: "S" },
-        { id: "expenses", label: "Expenses", icon: DollarSign, shortcut: "E" },
-        { id: "returns", label: "Returns Hub", icon: RotateCcw, shortcut: "T" },
-      ];
+  const navItems = useMemo(() => {
+    return isHqCeo
+      ? [
+          {
+            id: "billing",
+            label: "Collections HQ",
+            icon: LayoutGrid,
+            shortcut: "C",
+          },
+          {
+            id: "institutions",
+            label: "B2B Registry",
+            icon: Globe,
+            shortcut: "I",
+          },
+          { id: "website", label: "Manage Website", icon: Zap, shortcut: "W" },
+          {
+            id: "global_reports",
+            label: "Global Reports",
+            icon: BarChart3,
+            shortcut: "R",
+          },
+          { id: "audit", label: "Security Logs", icon: Receipt, shortcut: "A" },
+          {
+            id: "settings",
+            label: "Global Config",
+            icon: SettingsIcon,
+            shortcut: "G",
+          },
+        ]
+      : [
+          {
+            id: "dashboard",
+            label: "Intelligence",
+            icon: LayoutDashboard,
+            shortcut: "R",
+          },
+          { id: "pos", label: "Terminal", icon: ShoppingCart, shortcut: "P" },
+          { id: "inventory", label: "Inventory", icon: Package, shortcut: "I" },
+          { id: "credit", label: "Credit", icon: Users, shortcut: "U" },
+          { id: "hr", label: "Human Resources", icon: UserCog, shortcut: "H" },
+          { id: "sales", label: "Audit", icon: Receipt, shortcut: "L" },
+          { id: "reports", label: "Analytics", icon: BarChart3, shortcut: "B" },
+          { id: "suppliers", label: "Suppliers", icon: Truck, shortcut: "S" },
+          { id: "expenses", label: "Expenses", icon: DollarSign, shortcut: "E" },
+          { id: "returns", label: "Returns Hub", icon: RotateCcw, shortcut: "T" },
+        ];
+  }, [isHqCeo]);
+
+  // 🏷️ [HSM v2.4] Forensic RBAC Filtering
+  const authorizedNavItems = useMemo(() => {
+    if (isHqCeo || currentUser?.role === 'ADMIN') return navItems;
+    const authorized = currentUser?.authorizedModules || [];
+    return navItems.filter(item => authorized.includes(item.id));
+  }, [navItems, currentUser, isHqCeo]);
+
+  // 🛡️ [Vanguard Protocol] Security Redirect Logic
+  // Automatically lands the user in their primary authorized module if currentView is unauthorized
+  useEffect(() => {
+    if (!currentUser || isHqCeo || currentUser.role === 'ADMIN') return;
+    
+    const authorized = currentUser.authorizedModules || [];
+    const isActuallyAuthorized = authorized.includes(currentView);
+
+    if (!isActuallyAuthorized && authorized.length > 0) {
+      console.warn(`[Vanguard Security] Unauthorized Access Attempt [${currentView}]. Redirecting...`);
+      // Land in first available module (usually Dashboard or POS)
+      setCurrentView(authorized[0] as View);
+    }
+  }, [currentView, currentUser, isHqCeo]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -335,13 +370,13 @@ export default function AppShell() {
         </div>
 
         <nav className="flex-1 flex flex-col gap-0.5 w-full overflow-y-auto scrollbar-hide px-0 pt-2">
-          {navItems.map((item, idx) => (
+          {authorizedNavItems.map((item, idx) => (
             <React.Fragment key={item.id}>
               {/* Optional: Add separators for terminal users at specific points */}
               {!isHqCeo &&
                 (idx === 3 ||
                   idx === 6 ||
-                  (idx === 9 && currentUser?.role === "admin")) && (
+                  (idx === 9 && currentUser?.role === "ADMIN")) && (
                   <div className="px-4 my-3">
                     <hr className="border-brand-steel border-t-2 opacity-50" />
                   </div>
@@ -486,16 +521,31 @@ export default function AppShell() {
               {currentTime.toLocaleTimeString()}
             </div>
             <div className="relative" ref={profileDropdownRef}>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*"
+                onChange={handleAvatarUpdate}
+              />
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className={cn(
-                  "w-8 h-8 flex items-center justify-center text-[11px] font-bold rounded transition-all",
+                  "w-8 h-8 flex items-center justify-center text-[11px] font-bold rounded transition-all overflow-hidden",
                   isProfileOpen
                     ? "bg-brand-accent text-white shadow-[0_0_15px_rgba(249,115,22,0.4)]"
                     : "bg-brand-accent/10 border border-brand-accent/20 text-brand-accent hover:bg-brand-accent/20",
                 )}
               >
-                {currentUser?.name?.charAt(0) || "C"}
+                {currentUser?.profilePicture ? (
+                  <img 
+                    src={`${API_BASE_URL}${currentUser.profilePicture}`} 
+                    alt="Identity" 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  currentUser?.name?.charAt(0) || "C"
+                )}
               </button>
 
               <AnimatePresence>
@@ -514,6 +564,12 @@ export default function AppShell() {
                       <div className="text-[7px] font-mono text-brand-accent uppercase mt-0.5 opacity-70">
                         Privilege_Level // {currentUser?.role || "Guest"}
                       </div>
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="text-[6px] font-mono text-brand-accent uppercase mt-1 hover:underline cursor-pointer"
+                      >
+                        [UPDATE_IDENTITY_IMAGE]
+                      </button>
                     </div>
 
                     <div className="flex flex-col">
@@ -531,19 +587,21 @@ export default function AppShell() {
                         Strategic_Commands
                       </button>
 
-                      <button
-                        onClick={() => {
-                          handleSetView("settings");
-                          setIsProfileOpen(false);
-                        }}
-                        className="flex items-center gap-3 px-4 py-2.5 text-[9px] font-display text-[var(--text-muted)] hover:text-brand-accent hover:bg-brand-accent/10 transition-all uppercase tracking-widest group"
-                      >
-                        <SettingsIcon
-                          size={14}
-                          className="group-hover:text-brand-accent transition-colors"
-                        />
-                        Global_Settings
-                      </button>
+                      {(isHqCeo || currentUser?.role === 'ADMIN') && (
+                        <button
+                          onClick={() => {
+                            handleSetView("settings");
+                            setIsProfileOpen(false);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2.5 text-[9px] font-display text-[var(--text-muted)] hover:text-brand-accent hover:bg-brand-accent/10 transition-all uppercase tracking-widest group"
+                        >
+                          <SettingsIcon
+                            size={14}
+                            className="group-hover:text-brand-accent transition-colors"
+                          />
+                          Global_Settings
+                        </button>
+                      )}
 
                       <div className="h-px bg-[var(--border-main)] my-1 mx-2" />
 
@@ -585,33 +643,35 @@ export default function AppShell() {
               transition={{ duration: 0.2 }}
               className="h-full"
             >
-              {currentView === "dashboard" && <Dashboard />}
-              {currentView === "pos" && (
-                <POS onExit={() => setCurrentView("dashboard")} />
-              )}
-              {currentView === "inventory" && <Inventory />}
-              {currentView === "credit" && <CreditManagement />}
-              {currentView === "sales" && <SalesLogs />}
-              {currentView === "suppliers" && <Suppliers />}
-              {currentView === "expenses" && (
-                <div className="hidden lg:block h-full">
-                  <Expenses />
-                </div>
-              )}
-              {currentView === "reports" && <Reports />}
-              {currentView === "returns" && <ReturnsManagement />}
-              {currentView === "hr" && currentUser?.role === "admin" && (
-                <HRModule />
-              )}
+              <React.Suspense fallback={<LogoLoader status={loadingStatus} />}>
+                {currentView === "dashboard" && <Dashboard />}
+                {currentView === "pos" && (
+                  <POS onExit={() => setCurrentView("dashboard")} />
+                )}
+                {currentView === "inventory" && <Inventory />}
+                {currentView === "credit" && <CreditManagement />}
+                {currentView === "sales" && <SalesLogs />}
+                {currentView === "suppliers" && <Suppliers />}
+                {currentView === "expenses" && (
+                  <div className="hidden lg:block h-full">
+                    <Expenses />
+                  </div>
+                )}
+                {currentView === "reports" && <Reports />}
+                {currentView === "returns" && <ReturnsManagement />}
+                {currentView === "hr" && (isHqCeo || currentUser?.role === "ADMIN") && (
+                  <HRModule />
+                )}
 
-              {/* HQ Views */}
-              {currentView === "billing" && <BillingHub />}
-              {currentView === "institutions" && <InstitutionRegistry />}
-              {currentView === "website" && <WebsiteManager />}
-              {currentView === "global_reports" && <GlobalReports />}
-              {currentView === "audit" && <SystemAudit />}
+                {/* HQ Views */}
+                {currentView === "billing" && <BillingHub />}
+                {currentView === "institutions" && <InstitutionRegistry />}
+                {currentView === "website" && <WebsiteManager />}
+                {currentView === "global_reports" && <GlobalReports />}
+                {currentView === "audit" && <SystemAudit />}
 
-              {currentView === "settings" && (isHqCeo ? <InfrastructureHub /> : <SettingsView />)}
+                {currentView === "settings" && (isHqCeo ? <InfrastructureHub /> : <SettingsView />)}
+              </React.Suspense>
             </motion.div>
           </AnimatePresence>
         </div>
@@ -645,7 +705,7 @@ export default function AppShell() {
                   onKeyDown={(e) => {
                     if (e.key === "Escape") setIsCommandPaletteOpen(false);
                     if (e.key === "Enter") {
-                      const firstMatch = navItems.find((item) =>
+                      const firstMatch = authorizedNavItems.find((item) =>
                         item.label
                           .toLowerCase()
                           .includes(commandQuery.toLowerCase()),
@@ -660,7 +720,7 @@ export default function AppShell() {
                 />
               </div>
               <div className="p-2 max-h-96 overflow-y-auto scrollbar-industrial">
-                {navItems
+                {authorizedNavItems
                   .filter((item) =>
                     item.label
                       .toLowerCase()
@@ -700,7 +760,7 @@ export default function AppShell() {
                       </div>
                     </button>
                   ))}
-                {navItems.filter((item) =>
+                {authorizedNavItems.filter((item) =>
                   item.label.toLowerCase().includes(commandQuery.toLowerCase()),
                 ).length === 0 && (
                   <div className="p-8 text-center text-[var(--text-muted)] font-display text-[10px] uppercase italic opacity-40">

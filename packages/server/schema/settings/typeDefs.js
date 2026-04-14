@@ -5,6 +5,7 @@ export default gql`
     id: ID!
     name: String!
     description: String
+    authorizedModules: [String]
   }
 
   type Setting {
@@ -41,8 +42,9 @@ export default gql`
   extend type Mutation {
     updateSetting(key: String!, value: String!): Setting
     initializeSettingsDatabase: String
-    addRole(name: String!, description: String): Role!
+    addRole(name: String!, description: String, authorizedModules: [String]): Role!
     deleteRole(id: ID!): Boolean!
+    updateRole(id: ID!, name: String, description: String, authorizedModules: [String]): Role!
     
     # System Operations
     backupDatabase: BackupResult!

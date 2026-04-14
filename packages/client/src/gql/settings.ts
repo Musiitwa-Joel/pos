@@ -29,16 +29,29 @@ export const GET_ROLES = gql`
       id
       name
       description
+      authorizedModules
     }
   }
 `;
 
 export const ADD_ROLE = gql`
-  mutation AddRole($name: String!, $description: String) {
-    addRole(name: $name, description: $description) {
+  mutation AddRole($name: String!, $description: String, $authorizedModules: [String]) {
+    addRole(name: $name, description: $description, authorizedModules: $authorizedModules) {
       id
       name
       description
+      authorizedModules
+    }
+  }
+`;
+
+export const UPDATE_ROLE = gql`
+  mutation UpdateRole($id: ID!, $name: String, $description: String, $authorizedModules: [String]) {
+    updateRole(id: $id, name: $name, description: $description, authorizedModules: $authorizedModules) {
+      id
+      name
+      description
+      authorizedModules
     }
   }
 `;

@@ -126,6 +126,12 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
     });
   };
 
+  const productMap = useMemo(() => {
+    const map = new Map();
+    products.forEach(p => map.set(p.id, p));
+    return map;
+  }, [products]);
+
   const auditReport = useMemo(() => {
     const findings = [];
 
@@ -165,11 +171,11 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
   const stats = useMemo(() => {
     const today = new Date(now).setHours(0, 0, 0, 0);
     const todaySales = sales.filter(s => {
-      const sDate = s.createdAt ? new Date(s.createdAt).getTime() : s.timestamp;
+      const sDate = s.createdAt ? new Date(s.createdAt).getTime() : (Number(s.timestamp) || 0);
       return sDate >= today;
     });
     const todayReturns = saleReturns.filter(r => {
-      const rDate = new Date(r.createdAt).getTime();
+      const rDate = r.createdAt ? new Date(r.createdAt).getTime() : new Date().setHours(0,0,0,0);
       return rDate >= today;
     });
 
@@ -179,21 +185,23 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
     }).reduce((acc, e) => acc + e.amount, 0);
     const todayRefunds = todayReturns.reduce((acc, r) => acc + (Number(r.amount) || 0), 0);
 
-    // Revenue & COGS
-    const grossRevenue = todaySales.reduce((acc, s) => acc + s.total, 0);
-    const netRevenue = grossRevenue - todayRefunds;
+    // Revenue & COGS (Correctly sum multiple sales and deduct discounts)
+    const grossTotal = todaySales.reduce((acc, s) => acc + (parseFloat(s.subtotal as any) || (parseFloat(s.total as any) + (parseFloat(s.discount as any) || 0))), 0);
+    const totalDiscounts = todaySales.reduce((acc, s) => acc + (parseFloat(s.discount as any) || 0), 0);
+    const netRevenue = (grossTotal - totalDiscounts) - todayRefunds;
 
     const cogs = todaySales.reduce((acc, s) => {
-      const saleCost = s.items.reduce((itemAcc, item) => {
-        const product = products.find(p => p.id === item.productId);
-        return itemAcc + ((item.costPrice || product?.costPrice || 0) * item.quantity);
+      const saleCost = (s.items || []).reduce((itemAcc, item) => {
+        const product = productMap.get(item.productId);
+        const itemCost = parseFloat(item.costPrice as any) || parseFloat(product?.costPrice as any) || 0;
+        return itemAcc + (itemCost * item.quantity);
       }, 0);
       return acc + saleCost;
     }, 0);
 
     // Adjust COGS for returned items if they go back to stock
     const returnCogs = todayReturns.reduce((acc, r) => {
-      const product = products.find(p => p.id === r.productId);
+      const product = productMap.get(r.productId);
       return acc + ((product?.costPrice || 0) * r.quantity);
     }, 0);
 
@@ -223,7 +231,7 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
       { label: 'CRITICAL STOCK', value: `${lowStockCount} / ${stockOutCount}`, icon: AlertTriangle, trend: 'WARN', color: 'text-orange-500' },
       { label: 'STAFF DEPLOYMENT', value: `${staffPresent} ACTIVE`, icon: UserCheck, trend: 'ON_DUTY', color: 'text-green-500' },
     ];
-  }, [sales, products, customers, expenses, suppliers, attendance, saleReturns]);
+  }, [sales, products, customers, expenses, suppliers, attendance, saleReturns, productMap]);
 
   const chartData = useMemo(() => {
     const days = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
@@ -253,7 +261,7 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
 
         // Calculate COGS in same pass
         const saleCogs = s.items.reduce((acc, item) => {
-          const product = products.find(p => p.id === item.productId);
+          const product = productMap.get(item.productId);
           return acc + ((item.costPrice || product?.costPrice || 0) * item.quantity);
         }, 0);
         b.cogs += saleCogs;
@@ -274,7 +282,7 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
       if (buckets.has(dayKey)) {
         const b = buckets.get(dayKey);
         b.revenue -= (Number(r.amount) || 0);
-        const product = products.find(p => p.id === r.productId);
+        const product = productMap.get(r.productId);
         b.cogs -= ((product?.costPrice || 0) * r.quantity);
       }
     });
@@ -286,19 +294,25 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
         profit: b.revenue - b.cogs - b.expenses
       };
     });
-  }, [sales, expenses, products, saleReturns, now]);
+  }, [sales, expenses, products, saleReturns, now, productMap]);
 
   const combinedLogs = useMemo(() => {
-    const saleLogs = sales.map(s => ({ ...s, type: 'SALE', sortDate: s.createdAt ? new Date(s.createdAt).getTime() : s.timestamp }));
+    const saleLogs = sales.map(s => ({ ...s, type: 'SALE', sortDate: s.createdAt ? new Date(s.createdAt).getTime() : (Number(s.timestamp) || 0) }));
     const expenseLogs = expenses.map(e => ({ ...e, type: 'EXPENSE', sortDate: new Date(e.date).getTime() }));
-    return [...saleLogs, ...expenseLogs].sort((a, b) => b.sortDate - a.sortDate).slice(0, 5);
-  }, [sales, expenses]);
+    const returnLogs = saleReturns.map(r => ({ ...r, type: 'RETURN', sortDate: new Date(r.createdAt).getTime(), total: r.amount }));
+    
+    return [...saleLogs, ...expenseLogs, ...returnLogs]
+      .sort((a, b) => b.sortDate - a.sortDate)
+      .slice(0, 5);
+  }, [sales, expenses, saleReturns]);
 
   const isLight = document.documentElement.classList.contains('light');
   const gridColor = isLight ? '#E2E8F0' : '#2A2F3A';
   const axisColor = isLight ? '#64748B' : '#475569';
   const tooltipBg = isLight ? '#FFFFFF' : '#0F1115';
   const tooltipBorder = isLight ? '#E2E8F0' : '#2A2F3A';
+
+  if (isInitializing) return <SkeletonDashboard />;
 
   return (
     <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 h-full overflow-y-auto custom-scrollbar">
@@ -445,35 +459,51 @@ EOF // END_OF_FILE // ENCRYPTION_HASH: ${Math.random().toString(36).substring(2,
             <span className="text-[8px] font-mono text-brand-accent animate-pulse">● LIVE_DATA</span>
           </div>
           <div className="p-4 space-y-3 flex-1 overflow-y-auto">
-            {combinedLogs.map((log: any, i) => (
-              <div key={i} className={cn(
-                "flex items-center justify-between p-3 border group transition-all",
-                log.type === 'SALE' ? "border-brand-steel bg-brand-dark/5 hover:border-brand-accent/50" : "border-orange-500/20 bg-orange-500/5 hover:border-orange-500/50"
-              )}>
-                <div className="flex items-center gap-3">
-                  <div className={cn(
-                    "w-8 h-8 flex items-center justify-center transition-colors",
-                    log.type === 'SALE' ? "bg-brand-steel/10 text-brand-accent" : "bg-orange-500/10 text-orange-400"
-                  )}>
-                    {log.type === 'SALE' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+            {combinedLogs.map((log: any, i) => {
+              const isReturn = log.type === 'RETURN';
+              const isExpense = log.type === 'EXPENSE';
+              const isSale = log.type === 'SALE';
+              
+              return (
+                <div key={i} className={cn(
+                  "flex items-center justify-between p-3 border group transition-all",
+                  isSale ? "border-brand-steel bg-brand-dark/5 hover:border-brand-accent/50" : 
+                  isExpense ? "border-orange-500/20 bg-orange-500/5 hover:border-orange-500/50" :
+                  "border-danger/30 bg-danger/5 hover:border-danger/60"
+                )}>
+                  <div className="flex items-center gap-3">
+                    <div className={cn(
+                      "w-8 h-8 flex items-center justify-center transition-colors",
+                      isSale ? "bg-brand-steel/10 text-brand-accent" : 
+                      isExpense ? "bg-orange-500/10 text-orange-400" :
+                      "bg-danger/10 text-danger"
+                    )}>
+                      {isSale ? <ArrowUpRight size={14} /> : 
+                       isExpense ? <ArrowDownRight size={14} /> : 
+                       <TrendingDown size={14} />}
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-display">
+                        {isSale ? log.paymentMethod.toUpperCase() : 
+                         isExpense ? log.category.toUpperCase() : 
+                         `REFUND: ${log.reason?.toUpperCase() || 'UNSPECIFIED'}`}
+                      </p>
+                      <p className="text-[8px] text-slate-900 dark:text-slate-500 font-mono mt-0.5">
+                        {new Date(log.sortDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} // {log.type}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[9px] font-display">{log.type === 'SALE' ? log.paymentMethod.toUpperCase() : log.category.toUpperCase()}</p>
-                    <p className="text-[8px] text-slate-900 dark:text-slate-500 font-mono mt-0.5">
-                      {new Date(log.sortDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} // {log.type}
-                    </p>
+                  <div className="text-right">
+                    <span className={cn(
+                      "text-xs font-mono font-bold",
+                      isSale ? "text-brand-accent" : "text-danger"
+                    )}>
+                      {isSale ? '+' : '-'}{formatCurrency(log.total || log.amount)}
+                    </span>
                   </div>
                 </div>
-                <div className="text-right">
-                  <span className={cn(
-                    "text-xs font-mono font-bold",
-                    log.type === 'SALE' ? "text-brand-accent" : "text-orange-400"
-                  )}>
-                    {log.type === 'SALE' ? '+' : '-'}{formatCurrency(log.total || log.amount)}
-                  </span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
             {combinedLogs.length === 0 && (
               <div className="h-full flex flex-col items-center justify-center text-slate-700 py-20">
                 <p className="text-[10px] font-display uppercase tracking-widest opacity-30">Await_Telemetry...</p>
