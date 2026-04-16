@@ -27,6 +27,7 @@ import ReceiptComp from "./Receipt";
 import Select from "./Select";
 import { toast } from "sonner";
 import DiscountModal from "./pos/DiscountModal";
+import ConfirmDialog from "./ConfirmDialog";
 import { v7 as uuidv7 } from "uuid";
 
 export default function POS({ onExit }: { onExit?: () => void }) {
@@ -81,6 +82,20 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   const [isFetchingStats, setIsFetchingStats] = useState(false);
   const [vetoedPromoIds, setVetoedPromoIds] = useState<string[]>([]);
   const [showHeldSales, setShowHeldSales] = useState(false);
+  
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -128,8 +143,19 @@ export default function POS({ onExit }: { onExit?: () => void }) {
       // CMD + BACKSPACE: Clear Cart Hub
       if (isMod && e.key === "Backspace") {
         e.preventDefault();
-        setCart([]);
-        toast.info("CART_CLEARED");
+        if (cart.length > 0) {
+          setConfirmConfig({
+            isOpen: true,
+            title: "AUTHORIZE_CART_PURGE",
+            message: "You are about to clear all items from the active transaction. This action cannot be undone. Continue?",
+            onConfirm: () => {
+              setCart([]);
+              toast.info("CART_CLEARED");
+            },
+            confirmText: "CLEAR_CART",
+            type: "danger"
+          });
+        }
       }
 
       // CMD + ENTER / CMD + S: Industrial Checkout
@@ -537,7 +563,14 @@ export default function POS({ onExit }: { onExit?: () => void }) {
                   Cancel
                 </button>
                 <button
-                  onClick={handleCloseShift}
+                  onClick={() => setConfirmConfig({
+                    isOpen: true,
+                    title: "AUTHORIZE_SHIFT_CLOSURE",
+                    message: "WARNING: You are about to finalize the active terminal shift and lock the register for audit. Ensure physical cash counts have been accurately entered.",
+                    onConfirm: handleCloseShift,
+                    confirmText: "FINALIZE_&_CLOSE",
+                    type: "danger"
+                  })}
                   className="btn-industrial bg-danger hover:bg-danger/80 text-white py-3 text-[10px] font-display uppercase"
                 >
                   Finalize_&_Close
@@ -610,7 +643,14 @@ export default function POS({ onExit }: { onExit?: () => void }) {
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           <button
-                            onClick={() => deleteHeldTransaction(held.id)}
+                            onClick={() => setConfirmConfig({
+                              isOpen: true,
+                              title: "AUTHORIZE_PARKED_SALE_DECOMMISSION",
+                              message: "You are about to permanently remove this parked transaction from the institutional registry. This action cannot be undone. Continue?",
+                              onConfirm: () => deleteHeldTransaction(held.id),
+                              confirmText: "DECOMMISSION_SALE",
+                              type: "danger"
+                            })}
                             className="p-2 border border-brand-steel text-danger hover:bg-danger/10 transition-all rounded"
                             title="Discard Transaction"
                           >
@@ -1169,6 +1209,16 @@ export default function POS({ onExit }: { onExit?: () => void }) {
             document.body,
           )}
       </div>
+      {/* 🛡️ Institutional Confirmation Handshake Area */}
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

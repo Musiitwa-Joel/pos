@@ -25,6 +25,7 @@ import {
 import { motion, AnimatePresence } from "motion/react";
 import Select from "./Select";
 import { toast } from "sonner";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function HRModule() {
   const {
@@ -49,6 +50,20 @@ export default function HRModule() {
   const [isAttendanceModalOpen, setIsAttendanceModalOpen] = useState(false);
   const [attendanceEmployee, setAttendanceEmployee] = useState<any>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   // Form states
   const [newEmployee, setNewEmployee] = useState({
@@ -118,6 +133,26 @@ export default function HRModule() {
     id: string,
     status: "active" | "on_leave" | "terminated",
   ) => {
+    const employee = employees.find(e => e.id === id);
+    
+    if (status === 'terminated') {
+      setConfirmConfig({
+        isOpen: true,
+        title: "AUTHORIZE_PERSONNEL_TERMINATION",
+        message: `WARNING: You are about to strictly terminate the employment record for ${employee?.name || 'this individual'}. This action will revoke all institutional access and security credentials. Are you absolutely certain?`,
+        onConfirm: async () => {
+          try {
+            await updateEmployee(id, { status });
+            setActiveEmployeeId(null);
+            toast.success("Personnel termination sequence complete.");
+          } catch (err) {}
+        },
+        confirmText: "CONFIRM_TERMINATION",
+        type: "danger"
+      });
+      return;
+    }
+
     try {
       await updateEmployee(id, { status });
       setActiveEmployeeId(null);
@@ -731,7 +766,19 @@ export default function HRModule() {
                       {formatCurrency(stats.monthlyPayroll)}
                     </span>
                   </div>
-                  <button className="btn-industrial btn-primary w-full py-4 font-bold tracking-widest text-xs">
+                  <button 
+                    onClick={() => setConfirmConfig({
+                      isOpen: true,
+                      title: "AUTHORIZE_PAYROLL_DISBURSEMENT",
+                      message: `You are about to trigger the monthly payroll disbursement of ${formatCurrency(stats.monthlyPayroll)}. This will generate financial ledger entries for ${employees.length} personnel. Continue?`,
+                      onConfirm: () => {
+                        toast.success("Payroll disbursement initialized.");
+                      },
+                      confirmText: "EXECUTE_DISBURSEMENT",
+                      type: "info"
+                    })}
+                    className="btn-industrial btn-primary w-full py-4 font-bold tracking-widest text-xs"
+                  >
                     DISBURSE PAYROLL
                   </button>
                 </div>
@@ -1079,6 +1126,17 @@ export default function HRModule() {
           </AnimatePresence>
         </div>
       </div>
+      
+      {/* 🛡️ Institutional Confirmation Handshake Area */}
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

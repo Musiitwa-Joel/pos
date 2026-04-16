@@ -25,7 +25,19 @@ export default function SettingsView() {
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [telemetry, setTelemetry] = useState<any>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
-  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const MODULES = [
     { id: 'dashboard', label: 'INTELLIGENCE (DASHBOARD)' },
@@ -324,7 +336,14 @@ export default function SettingsView() {
                                         MANAGE
                                       </button>
                                       <button
-                                        onClick={() => setRoleToDelete(role)}
+                                        onClick={() => setConfirmConfig({
+                                          isOpen: true,
+                                          title: "AUTHORIZE_ROLE_DELETION",
+                                          message: `Are you absolutely sure you want to decommission the '${role.name}' institutional identity? This action will immediately invalidate all security mappings for users assigned to this role.`,
+                                          onConfirm: () => deleteRole(role.id),
+                                          confirmText: "DECOMMISSION_ROLE",
+                                          type: "danger"
+                                        })}
                                         className="text-danger hover:underline text-[8px] font-display"
                                       >
                                         REMOVE
@@ -544,13 +563,27 @@ export default function SettingsView() {
                 <h4 className="text-[9px] font-display text-brand-accent uppercase italic opacity-90 dark:opacity-60 tracking-widest">System_Maintenance_Utilities</h4>
                 <div className="flex flex-wrap gap-4">
                   <button
-                    onClick={() => initializeSettingsDB()}
+                    onClick={() => setConfirmConfig({
+                      isOpen: true,
+                      title: "AUTHORIZE_SCHEMA_REBUILD",
+                      message: "WARNING: You are about to rebuild the system settings schema. This is a low-level operation that should only be performed during institutional recovery or maintenance. Proceed with caution.",
+                      onConfirm: () => initializeSettingsDB(),
+                      confirmText: "REBUILD_SCHEMA",
+                      type: "warning"
+                    })}
                     className="btn-industrial btn-outline py-2 px-6 text-[8px] border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 transition-all font-display uppercase tracking-widest"
                   >
                     REBUILD_SETTINGS_SCHEMA
                   </button>
                   <button
-                    onClick={() => initializeUserDB()}
+                    onClick={() => setConfirmConfig({
+                      isOpen: true,
+                      title: "AUTHORIZE_AUTH_NODE_RESET",
+                      message: "WARNING: This protocol will reset the authentication node residency. This is a high-risk operational reset. Are you absolutely certain you wish to proceed?",
+                      onConfirm: () => initializeUserDB(),
+                      confirmText: "RESET_AUTH_NODE",
+                      type: "danger"
+                    })}
                     className="btn-industrial btn-outline py-2 px-6 text-[8px] border-brand-accent/30 text-brand-accent hover:bg-brand-accent/10 transition-all font-display uppercase tracking-widest"
                   >
                     RESET_AUTH_NODE
@@ -571,15 +604,13 @@ export default function SettingsView() {
       
       {/* 🛡️ Institutional Confirmation Handshake Area */}
       <ConfirmDialog
-        isOpen={!!roleToDelete}
-        onClose={() => setRoleToDelete(null)}
-        onConfirm={async () => {
-          if (roleToDelete) await deleteRole(roleToDelete.id);
-        }}
-        title="AUTHORIZE_ROLE_DELETION"
-        message={`Are you absolutely sure you want to decommission the '${roleToDelete?.name}' institutional identity? This action will immediately invalidate all security mappings for users assigned to this role.`}
-        confirmText="DECOMMISSION_ROLE"
-        type="danger"
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        type={confirmConfig.type}
       />
     </div>
   );

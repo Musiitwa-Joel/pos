@@ -21,6 +21,7 @@ import { Customer } from "../types";
 import Modal from "./Modal";
 import Select from "./Select";
 import { toast } from "sonner";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function CreditManagement() {
   const {
@@ -46,10 +47,23 @@ export default function CreditManagement() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(
     null,
   );
+
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(
     null,
@@ -177,23 +191,27 @@ export default function CreditManagement() {
   };
 
   const confirmDelete = (id: string) => {
-    setDeletingPaymentId(id);
-    setIsDeleteModalOpen(true);
+    setConfirmConfig({
+      isOpen: true,
+      title: "AUTHORIZE_PAYMENT_REVERSAL",
+      message: "WARNING: You are about to strictly reverse this customer payment. This action will restore the outstanding debt balance and invalidate the transaction record for recent audits. Continue?",
+      onConfirm: () => executeDelete(id),
+      confirmText: "REVERSE_PAYMENT",
+      type: "danger"
+    });
   };
 
-  const executeDelete = async () => {
-    if (!deletingPaymentId || !selectedCustomer) return;
+  const executeDelete = async (id: string) => {
+    if (!id || !selectedCustomer) return;
     setIsSubmitting(true);
     try {
-      await deleteCustomerPayment(deletingPaymentId);
+      await deleteCustomerPayment(id);
       const payments = await getCustomerPayments(selectedCustomer.id);
       setPaymentHistory(payments);
       getDailyDebtRecovered().then(setRecoveredToday);
       toast.success("PAYMENT_REVERSED");
-      setIsDeleteModalOpen(false);
     } finally {
       setIsSubmitting(false);
-      setDeletingPaymentId(null);
     }
   };
 
@@ -976,49 +994,16 @@ export default function CreditManagement() {
           </div>
         )}
       </Modal>
-
-      {/* Industrial Rollback Confirmation */}
-      <Modal
-        isOpen={isDeleteModalOpen}
-        onClose={() => setIsDeleteModalOpen(false)}
-        title="CRITICAL_AUTHORIZATION // ROLLBACK_RECOVERY"
-      >
-        <div className="space-y-4">
-          <div className="p-4 bg-danger/5 border border-danger/20 rounded">
-            <div className="flex items-center gap-3 text-danger mb-2">
-              <AlertCircle size={18} />
-              <span className="text-[10px] font-display font-bold uppercase tracking-widest">
-                Permanent_Action_Warning
-              </span>
-            </div>
-            <p className="text-[10px] font-mono text-slate-800 dark:text-slate-400 leading-relaxed uppercase">
-              You are about to ROLLBACK this recovery transaction. This will
-              DELETE the payment record and RE-INSTATE the debt to the
-              customer's balance.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
-            <button
-              onClick={() => setIsDeleteModalOpen(false)}
-              className="btn-industrial py-4 sm:py-2 text-[9px] uppercase tracking-widest font-black text-slate-900 dark:text-slate-500 border border-brand-steel/20"
-            >
-              NEGATE_ROLLBACK
-            </button>
-            <button
-              onClick={executeDelete}
-              disabled={isSubmitting}
-              className="btn-industrial btn-danger py-4 sm:py-2 text-[9px] uppercase tracking-widest font-black flex items-center justify-center gap-2 shadow-lg"
-            >
-              {isSubmitting ? (
-                <Loader2 size={12} className="animate-spin" />
-              ) : (
-                <Save size={12} className="rotate-45" />
-              )}
-              CONFIRM_REVERSAL
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* 🛡️ Institutional Confirmation Handshake Area */}
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }

@@ -29,6 +29,7 @@ import Modal from "./Modal";
 import Select from "./Select";
 import { toast } from "sonner";
 import DatePicker from "./DatePicker";
+import ConfirmDialog from "./ConfirmDialog";
 
 export default function Expenses() {
   const {
@@ -47,8 +48,19 @@ export default function Expenses() {
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
 
   // Security Protocols
-  const [expensePendingId, setExpensePendingId] = useState<string | null>(null);
-  const [isConfirmModalOpen, setIsConfirmModalOpen] = useState(false);
+  const [confirmConfig, setConfirmConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'info';
+    confirmText?: string;
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {},
+  });
 
   const today = getLocalDateString();
   const firstDayOfMonth = getLocalFirstDayOfMonthString();
@@ -433,10 +445,19 @@ export default function Expenses() {
                               <Edit2 size={14} />
                             </button>
                             <button
-                              onClick={() => {
-                                setExpensePendingId(expense.id);
-                                setIsConfirmModalOpen(true);
-                              }}
+                              onClick={() => setConfirmConfig({
+                                isOpen: true,
+                                title: "AUTHORIZE_EXPENSE_VOID",
+                                message: `You are about to strictly void the ledger entry for Ref: #${expense.id.slice(0, 8)}. This action will invalidate the expenditure for financial audits. Are you absolutely certain?`,
+                                onConfirm: async () => {
+                                  try {
+                                    await deleteExpense(expense.id);
+                                    toast.success("Expenditure voided successfully.");
+                                  } catch (err) {}
+                                },
+                                confirmText: "VOID_EXPENDITURE",
+                                type: "danger"
+                              })}
                               className="p-1 text-slate-900 dark:text-slate-500 hover:text-danger transition-colors"
                             >
                               <Trash2 size={14} />
@@ -604,70 +625,16 @@ export default function Expenses() {
           </button>
         </form>
       </Modal>
-      {/* Security Confirmation Modal */}
-      <Modal
-        isOpen={isConfirmModalOpen}
-        onClose={() => {
-          if (!isSubmitting) {
-            setIsConfirmModalOpen(false);
-            setExpensePendingId(null);
-          }
-        }}
-        title="LEDGER_VOID_REQUISITION"
-        maxWidth="max-w-md"
-      >
-        <div className="space-y-6">
-          <div className="p-4 bg-danger/5 border border-danger/20 flex flex-col items-center text-center space-y-4">
-            <div className="w-12 h-12 bg-danger/10 rounded-full flex items-center justify-center text-danger">
-              <AlertTriangle size={24} />
-            </div>
-            <div>
-              <h3 className="text-xs font-display uppercase tracking-widest text-danger">
-                VOID_RECORD_AUTHORIZATION
-              </h3>
-              <p className="text-[10px] text-slate-900 dark:text-slate-500 mt-1 font-mono leading-relaxed">
-                VOID_LEDGER_ENTRY:{" "}
-                <span className="text-black font-bold">
-                  #{expensePendingId?.slice(0, 8)}
-                </span>
-                <br />
-                THIS RECORD WILL REMAIN IN THE SYSTEM BUT WILL BE VOIDED 
-                FOR CALCULATIONS. THIS ACTION IS AUDITED.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2 pt-2">
-            <button
-              onClick={async () => {
-                if (!expensePendingId) return;
-                setIsSubmitting(true);
-                try {
-                  await deleteExpense(expensePendingId);
-                  setIsConfirmModalOpen(false);
-                  setExpensePendingId(null);
-                } finally {
-                  setIsSubmitting(false);
-                }
-              }}
-              disabled={isSubmitting}
-              className="btn-industrial bg-danger text-white py-4 font-black uppercase tracking-widest text-[10px] shadow-[4px_4px_0px_0px_rgba(220,38,38,0.3)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all"
-            >
-              {isSubmitting ? "AUTHORIZING_VOID..." : "CONFIRM_VOID_PROTOCOL"}
-            </button>
-            <button
-              onClick={() => {
-                setIsConfirmModalOpen(false);
-                setExpensePendingId(null);
-              }}
-              disabled={isSubmitting}
-              className="btn-industrial btn-outline py-3 text-[10px] uppercase font-bold"
-            >
-              ABORT_COMMAND
-            </button>
-          </div>
-        </div>
-      </Modal>
+      {/* 🛡️ Institutional Confirmation Handshake Area */}
+      <ConfirmDialog
+        isOpen={confirmConfig.isOpen}
+        onClose={() => setConfirmConfig({ ...confirmConfig, isOpen: false })}
+        onConfirm={confirmConfig.onConfirm}
+        title={confirmConfig.title}
+        message={confirmConfig.message}
+        confirmText={confirmConfig.confirmText}
+        type={confirmConfig.type}
+      />
     </div>
   );
 }
