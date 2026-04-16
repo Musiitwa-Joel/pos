@@ -273,3 +273,16 @@ export const GET_SHIFT_EXPECTED = gql`
     }
   }
 `;
+
+export const GET_HELD_SALES = gql`
+  query GetHeldSales {
+    heldSales {
+      id
+      cart
+      customerId
+      discount
+      cashierId
+      createdAt
+    }
+  }
+`;

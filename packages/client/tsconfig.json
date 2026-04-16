@@ -17,8 +17,12 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"],
-      "apollo-upload-client": ["../../node_modules/apollo-upload-client"]
+      "@/*": [
+        "./src/*"
+      ],
+      "apollo-upload-client": [
+        "../../node_modules/apollo-upload-client"
+      ]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true

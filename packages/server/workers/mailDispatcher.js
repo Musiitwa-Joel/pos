@@ -1,96 +1,99 @@
 import cron from "node-cron";
-import { db, getTenantPool } from "../config/config.js";
+import { getTenantPool, registryPool } from "../config/config.js";
 import { sendMail } from "../utils/mailer.js";
 
 /**
- * HSM v2.4 Reliable Mail Dispatcher
- * Background worker that processes the mail_queue and handles SMTP retries.
+ * HSM v2.4 Multi-Tenant Institutional Mail Dispatcher
+ * Background worker that iterates through all business clusters,
+ * processing their local mail_queue registries and handling SMTP retries.
  * 
- * This worker ensures that even if SMTP connection is refused (ECONNREFUSED),
- * the notification is eventually delivered when connectivity is restored.
+ * DESIGN VANGUARD: This worker ensures institutional isolation by never 
+ * mixing communications between different business registries.
  */
 export const startMailDispatcher = () => {
-  console.log("[mailDispatcher] Background worker activated 🚀 (Scanning every 60s)");
+  console.log("[mailDispatcher] Decentralized Worker Activated 🚀 (Scanning All Institutions every 60s)");
 
   // Run every minute
   cron.schedule("* * * * *", async () => {
     try {
-      // 1. Fetch pending or failed (up to 5 retries) emails
-      // We process in small batches to avoid memory spikes
-      const [rows] = await db.query(
-        `SELECT * FROM mail_queue 
-         WHERE status IN ('pending', 'failed') AND retry_count < 5 
-         ORDER BY created_at ASC LIMIT 15`
+      // 1. Identify all active Institutional Registry Clusters
+      const [tenants] = await registryPool.query(
+        "SELECT id, db_name, name FROM tenants WHERE status = 'active'"
       );
 
-      if (!rows.length) return;
+      if (!tenants.length) return;
 
-      console.log(`[mailDispatcher] Processing ${rows.length} staged emails...`);
-
-      for (const mail of rows) {
+      for (const tenant of tenants) {
         try {
-          // 2. Prepare Attachments (Base64 string from DB -> Buffer)
-          let attachments = [];
-          if (mail.attachments) {
+          const tenantDb = getTenantPool(tenant.db_name);
+
+          // 2. Fetch pending or failed (up to 5 retries) emails from this institution's localized registry
+          const [rows] = await tenantDb.query(
+            `SELECT * FROM mail_queue 
+             WHERE status IN ('pending', 'failed') AND retry_count < 5 
+             ORDER BY created_at ASC LIMIT 10`
+          );
+
+          if (!rows.length) continue;
+
+          console.log(`[mailDispatcher] [${tenant.name}] Processing ${rows.length} institutional emails...`);
+
+          for (const mail of rows) {
             try {
-              const parsed = JSON.parse(mail.attachments);
-              attachments = parsed.map(item => {
-                if (item && item.content && item._isBase64) {
-                  item.content = Buffer.from(item.content, "base64");
-                  // No need to keep the flag in the final mail options
-                  delete item._isBase64;
+              // 3. Prepare Attachments (Base64 string from DB -> Buffer)
+              let attachments = [];
+              if (mail.attachments) {
+                try {
+                  const parsed = typeof mail.attachments === 'string' ? JSON.parse(mail.attachments) : mail.attachments;
+                  attachments = parsed.map(item => {
+                    if (item && item.content && item._isBase64) {
+                      item.content = Buffer.from(item.content, "base64");
+                      delete item._isBase64;
+                    }
+                    return item;
+                  });
+                } catch (err) {
+                  console.warn(`[mailDispatcher] [${tenant.name}] Attachment failure for mail ${mail.id}:`, err.message);
                 }
-                return item;
+              }
+
+              // 4. Attempt Dispatch via core mailer (inherits SMTP settings from tenantDb)
+              await sendMail({
+                to: mail.to_address,
+                subject: mail.subject,
+                fromName: mail.from_name,
+                fromEmail: mail.from_email,
+                html: mail.html_body,
+                text: mail.text_body,
+                attachments,
+                db: tenantDb
               });
-            } catch (err) {
-              console.warn(`[mailDispatcher] Failed to parse attachments for mail ${mail.id}:`, err.message);
+
+              // 🛡️ [VANGUARD] ATOMIC PURGE PROTOCOL:
+              // Immediately delete from institutional registry upon successful dispatch.
+              await tenantDb.execute("DELETE FROM mail_queue WHERE id = ?", [mail.id]);
+              console.log(`[mailDispatcher] [${tenant.name}] Successfully dispatched and PURGED mail ${mail.id}`);
+
+            } catch (error) {
+              console.error(`[mailDispatcher] [${tenant.name}] Dispatch failure for mail ${mail.id}:`, error.message);
+              
+              // 5. Failure Management: Increment local retry count and log telemetry
+              await tenantDb.execute(
+                `UPDATE mail_queue SET status = 'failed', retry_count = retry_count + 1, last_error = ? WHERE id = ?`,
+                [error.message || 'UNKNOWN_SMTP_ERROR', mail.id]
+              );
             }
           }
-
-          // 3. Resolve Institutional Context
-          // We pass the institutional pool to mailer.js so it can fetch the correct SMTP settings
-          const institutionalPool = getTenantPool(mail.db_cluster);
-
-          // 4. Attempt Dispatch via core mailer
-          await sendMail({
-            to: mail.to_address,
-            subject: mail.subject,
-            fromName: mail.from_name,
-            fromEmail: mail.from_email,
-            html: mail.html_body,
-            text: mail.text_body,
-            attachments,
-            db: institutionalPool
-          });
-
-          // 5. Success: Mark as sent
-          await db.execute(
-            `UPDATE mail_queue SET status = 'sent' WHERE id = ?`,
-            [mail.id]
-          );
-          console.log(`[mailDispatcher] Successfully dispatched staged email ${mail.id} to ${mail.to_address}`);
-
-        } catch (error) {
-          console.error(`[mailDispatcher] Dispatch attempt failed for mail ${mail.id}:`, error.message);
-          
-          // 6. Failure Management: Increment retry count and log telemetry
-          await db.execute(
-            `UPDATE mail_queue SET status = 'failed', retry_count = retry_count + 1, last_error = ? WHERE id = ?`,
-            [error.message || 'UNKNOWN_SMTP_ERROR', mail.id]
-          );
+        } catch (tenantErr) {
+          if (tenantErr.code === 'ER_NO_SUCH_TABLE') {
+            // Institutional Registry not yet provisioned; wait for first auto-provisioning event
+            continue;
+          }
+          console.error(`[mailDispatcher] Cluster error for ${tenant.db_name}:`, tenantErr.message);
         }
       }
-
-      // 7. Automated Housekeeping: Delete sent records older than 7 days
-      const [cleanup] = await db.execute(
-        `DELETE FROM mail_queue WHERE status = 'sent' AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`
-      );
-      if (cleanup.affectedRows > 0) {
-        console.log(`[mailDispatcher] Pruned ${cleanup.affectedRows} archived mail records.`);
-      }
-
     } catch (err) {
-      console.error("[mailDispatcher] Critical polling error:", err.message);
+      console.error("[mailDispatcher] Critical Institutional Discovery Failure:", err.message);
     }
   });
 };

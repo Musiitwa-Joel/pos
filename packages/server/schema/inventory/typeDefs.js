@@ -193,6 +193,7 @@ export default `
       promoId: String
       promoName: String
       clientTxId: String
+      heldSaleId: String
       items: [SaleItemInput!]!
     ): Sale!
 

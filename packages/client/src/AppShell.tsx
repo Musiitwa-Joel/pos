@@ -214,55 +214,55 @@ export default function AppShell() {
   const navItems = useMemo(() => {
     return isHqCeo
       ? [
-          {
-            id: "billing",
-            label: "Collections HQ",
-            icon: LayoutGrid,
-            shortcut: "C",
-          },
-          {
-            id: "institutions",
-            label: "B2B Registry",
-            icon: Globe,
-            shortcut: "I",
-          },
-          { id: "website", label: "Manage Website", icon: Zap, shortcut: "W" },
-          {
-            id: "global_reports",
-            label: "Global Reports",
-            icon: BarChart3,
-            shortcut: "R",
-          },
-          { id: "audit", label: "Security Logs", icon: Receipt, shortcut: "A" },
-          {
-            id: "settings",
-            label: "Global Config",
-            icon: SettingsIcon,
-            shortcut: "G",
-          },
-        ]
+        {
+          id: "billing",
+          label: "Collections HQ",
+          icon: LayoutGrid,
+          shortcut: "C",
+        },
+        {
+          id: "institutions",
+          label: "B2B Registry",
+          icon: Globe,
+          shortcut: "I",
+        },
+        { id: "website", label: "Manage Website", icon: Zap, shortcut: "W" },
+        {
+          id: "global_reports",
+          label: "Global Reports",
+          icon: BarChart3,
+          shortcut: "R",
+        },
+        { id: "audit", label: "Security Logs", icon: Receipt, shortcut: "A" },
+        {
+          id: "settings",
+          label: "Global Config",
+          icon: SettingsIcon,
+          shortcut: "G",
+        },
+      ]
       : [
-          {
-            id: "dashboard",
-            label: "Intelligence",
-            icon: LayoutDashboard,
-            shortcut: "R",
-          },
-          { id: "pos", label: "Terminal", icon: ShoppingCart, shortcut: "P" },
-          { id: "inventory", label: "Inventory", icon: Package, shortcut: "I" },
-          { id: "credit", label: "Credit", icon: Users, shortcut: "U" },
-          { id: "hr", label: "Human Resources", icon: UserCog, shortcut: "H" },
-          { id: "sales", label: "Audit", icon: Receipt, shortcut: "L" },
-          { id: "reports", label: "Analytics", icon: BarChart3, shortcut: "B" },
-          { id: "suppliers", label: "Suppliers", icon: Truck, shortcut: "S" },
-          { id: "expenses", label: "Expenses", icon: DollarSign, shortcut: "E" },
-          { id: "returns", label: "Returns Hub", icon: RotateCcw, shortcut: "T" },
-        ];
+        {
+          id: "dashboard",
+          label: "Intelligence",
+          icon: LayoutDashboard,
+          shortcut: "R",
+        },
+        { id: "pos", label: "Terminal", icon: ShoppingCart, shortcut: "P" },
+        { id: "inventory", label: "Inventory", icon: Package, shortcut: "I" },
+        { id: "credit", label: "Credit", icon: Users, shortcut: "U" },
+        { id: "hr", label: "Human Resources", icon: UserCog, shortcut: "H" },
+        { id: "sales", label: "Audit", icon: Receipt, shortcut: "L" },
+        { id: "reports", label: "Analytics", icon: BarChart3, shortcut: "B" },
+        { id: "suppliers", label: "Suppliers", icon: Truck, shortcut: "S" },
+        { id: "expenses", label: "Expenses", icon: DollarSign, shortcut: "E" },
+        { id: "returns", label: "Returns Hub", icon: RotateCcw, shortcut: "T" },
+      ];
   }, [isHqCeo]);
 
   // 🏷️ [HSM v2.4] Forensic RBAC Filtering
   const authorizedNavItems = useMemo(() => {
-    if (isHqCeo || currentUser?.role === 'ADMIN') return navItems;
+    if (isHqCeo || currentUser?.role?.toUpperCase() === 'ADMIN') return navItems;
     const authorized = currentUser?.authorizedModules || [];
     return navItems.filter(item => authorized.includes(item.id));
   }, [navItems, currentUser, isHqCeo]);
@@ -270,17 +270,21 @@ export default function AppShell() {
   // 🛡️ [Vanguard Protocol] Security Redirect Logic
   // Automatically lands the user in their primary authorized module if currentView is unauthorized
   useEffect(() => {
-    if (!currentUser || isHqCeo || currentUser.role === 'ADMIN') return;
-    
-    const authorized = currentUser.authorizedModules || [];
-    const isActuallyAuthorized = authorized.includes(currentView);
+    if (!currentUser || isHqCeo || currentUser.role?.toUpperCase() === 'ADMIN') return;
 
-    if (!isActuallyAuthorized && authorized.length > 0) {
-      console.warn(`[Vanguard Security] Unauthorized Access Attempt [${currentView}]. Redirecting...`);
-      // Land in first available module (usually Dashboard or POS)
-      setCurrentView(authorized[0] as View);
+    const authorizedIds = currentUser.authorizedModules || [];
+    const isActuallyAuthorized = authorizedIds.includes(currentView);
+    
+    if (!isActuallyAuthorized && authorizedIds.length > 0) {
+      // Find the first module in the logical navItems order that the user is actually authorized for
+      const firstAvailable = navItems.find(item => authorizedIds.includes(item.id as any));
+      
+      if (firstAvailable) {
+        // console.log(`[TredPOS Security] Re-aligning landing view to hierarchy: ${firstAvailable.id}`);
+        setCurrentView(firstAvailable.id as View);
+      }
     }
-  }, [currentView, currentUser, isHqCeo]);
+  }, [currentView, currentUser, isHqCeo, navItems]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -521,10 +525,10 @@ export default function AppShell() {
               {currentTime.toLocaleTimeString()}
             </div>
             <div className="relative" ref={profileDropdownRef}>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
                 accept="image/*"
                 onChange={handleAvatarUpdate}
               />
@@ -538,9 +542,9 @@ export default function AppShell() {
                 )}
               >
                 {currentUser?.profilePicture ? (
-                  <img 
-                    src={`${API_BASE_URL}${currentUser.profilePicture}`} 
-                    alt="Identity" 
+                  <img
+                    src={`${API_BASE_URL}${currentUser.profilePicture}`}
+                    alt="Identity"
                     className="w-full h-full object-cover"
                   />
                 ) : (
@@ -564,7 +568,7 @@ export default function AppShell() {
                       <div className="text-[7px] font-mono text-brand-accent uppercase mt-0.5 opacity-70">
                         Privilege_Level // {currentUser?.role || "Guest"}
                       </div>
-                      <button 
+                      <button
                         onClick={() => fileInputRef.current?.click()}
                         className="text-[6px] font-mono text-brand-accent uppercase mt-1 hover:underline cursor-pointer"
                       >
@@ -587,7 +591,7 @@ export default function AppShell() {
                         Strategic_Commands
                       </button>
 
-                      {(isHqCeo || currentUser?.role === 'ADMIN') && (
+                      {(isHqCeo || currentUser?.role?.toUpperCase() === 'ADMIN') && (
                         <button
                           onClick={() => {
                             handleSetView("settings");
@@ -659,7 +663,7 @@ export default function AppShell() {
                 )}
                 {currentView === "reports" && <Reports />}
                 {currentView === "returns" && <ReturnsManagement />}
-                {currentView === "hr" && (isHqCeo || currentUser?.role === "ADMIN") && (
+                {currentView === "hr" && (isHqCeo || currentUser?.role?.toUpperCase() === "ADMIN") && (
                   <HRModule />
                 )}
 
@@ -670,7 +674,7 @@ export default function AppShell() {
                 {currentView === "global_reports" && <GlobalReports />}
                 {currentView === "audit" && <SystemAudit />}
 
-                {currentView === "settings" && (isHqCeo ? <InfrastructureHub /> : <SettingsView />)}
+                {currentView === "settings" && (isHqCeo || currentUser?.role?.toUpperCase() === "ADMIN" ? (isHqCeo ? <InfrastructureHub /> : <SettingsView />) : null)}
               </React.Suspense>
             </motion.div>
           </AnimatePresence>
@@ -763,10 +767,10 @@ export default function AppShell() {
                 {authorizedNavItems.filter((item) =>
                   item.label.toLowerCase().includes(commandQuery.toLowerCase()),
                 ).length === 0 && (
-                  <div className="p-8 text-center text-[var(--text-muted)] font-display text-[10px] uppercase italic opacity-40">
-                    No_Matching_Commands_Found
-                  </div>
-                )}
+                    <div className="p-8 text-center text-[var(--text-muted)] font-display text-[10px] uppercase italic opacity-40">
+                      No_Matching_Commands_Found
+                    </div>
+                  )}
               </div>
               <div className="p-3 bg-[var(--bg-panel)] border-t border-[var(--border-main)] flex justify-between items-center text-[8px] font-mono text-[var(--text-muted)] px-6">
                 <div className="flex gap-4">

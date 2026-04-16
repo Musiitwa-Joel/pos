@@ -12,19 +12,19 @@ import {
 import { LOGIN, GOOGLE_LOGIN, INITIALIZE_USER_DB } from './gql/mutations/auth';
 
 import { INITIALIZE_LOGS_DB } from './gql/mutations/logs';
-import { 
-  GET_SETTINGS, 
-  UPDATE_SETTING, 
-  INITIALIZE_SETTINGS_DB, 
-  GET_ROLES, 
-  ADD_ROLE, 
+import {
+  GET_SETTINGS,
+  UPDATE_SETTING,
+  INITIALIZE_SETTINGS_DB,
+  GET_ROLES,
+  ADD_ROLE,
   UPDATE_ROLE,
   DELETE_ROLE,
   GET_SYSTEM_TELEMETRY,
   BACKUP_DATABASE,
   TEST_NOTIFICATION_SETTINGS
 } from './gql/settings';
-import { GET_SUPPLIERS, GET_PRODUCTS, GET_INVENTORY_TRANSACTIONS, GET_CUSTOMERS, GET_CUSTOMER_PAYMENTS, GET_ALL_CUSTOMER_PAYMENTS, GET_DAILY_DEBT_RECOVERED, GET_SALES, GET_EXPENSES, GET_AUDIT_LOGS, GET_SALE_RETURNS, GET_CASHIER_SHIFTS, GET_ACTIVE_SHIFT, GET_PROFIT_REPORT, GET_PROMOTIONS, GET_SHIFT_EXPECTED } from './gql/queries/inventory';
+import { GET_SUPPLIERS, GET_PRODUCTS, GET_INVENTORY_TRANSACTIONS, GET_CUSTOMERS, GET_CUSTOMER_PAYMENTS, GET_ALL_CUSTOMER_PAYMENTS, GET_DAILY_DEBT_RECOVERED, GET_SALES, GET_EXPENSES, GET_AUDIT_LOGS, GET_SALE_RETURNS, GET_CASHIER_SHIFTS, GET_ACTIVE_SHIFT, GET_PROFIT_REPORT, GET_PROMOTIONS, GET_SHIFT_EXPECTED, GET_HELD_SALES } from './gql/queries/inventory';
 import { getLocalDateString, getPastLocalDateString } from './lib/utils';
 import {
   ADD_SUPPLIER,
@@ -51,7 +51,9 @@ import {
   UPDATE_PROMOTION,
   DELETE_PROMOTION,
   TOGGLE_PROMOTION,
-  DELETE_CUSTOMER_PAYMENT
+  DELETE_CUSTOMER_PAYMENT,
+  HOLD_SALE,
+  DELETE_HELD_SALE
 } from './gql/mutations/inventory';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'sonner';
@@ -95,7 +97,7 @@ interface HardwareContextType {
   retireProduct: (id: string) => Promise<void>;
   adjustStock: (productId: string, quantity: number, type: string, notes?: string) => Promise<void>;
   refreshInventory: (silent?: boolean) => Promise<void>;
-  addSale: (sale: Omit<Sale, 'id' | 'timestamp'> & { clientTxId?: string }) => Promise<any>;
+  addSale: (sale: Omit<Sale, 'id' | 'timestamp'> & { clientTxId?: string; heldSaleId?: string }) => Promise<any>;
   refreshSales: (startDate?: string, endDate?: string, search?: string, silent?: boolean) => Promise<void>;
   addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'createdAt' | 'updatedAt'>) => Promise<void>;
   updateCustomer: (id: string, updates: Partial<Customer>) => Promise<void>;
@@ -154,8 +156,10 @@ interface HardwareContextType {
   isSalesLoading: boolean;
   withLoading: (displayStatus: string | undefined, fn: () => Promise<void>, showToast?: boolean) => Promise<void>;
   updateProfilePicture: (file: File) => Promise<void>;
-  playSound: (sound: 'cash' | 'select') => void;
-  initAudio: () => void;
+  heldSales: any[];
+  refreshHeldSales: (silent?: boolean) => Promise<void>;
+  holdTransaction: (cart: string, customerId?: string, discount?: number) => Promise<any>;
+  deleteHeldTransaction: (id: string) => Promise<void>;
 }
 
 
@@ -240,13 +244,14 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [saleReturns, setSaleReturns] = useState<any[]>([]);
-  const [classTeachers, setClassTeachers] = useState<any[]>([]); 
+  const [heldSales, setHeldSales] = useState<any[]>([]);
+  const [classTeachers, setClassTeachers] = useState<any[]>([]);
   const [classes, setClasses] = useState<any[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-  const saved = localStorage.getItem('user');
-  return saved ? JSON.parse(saved) : null;
-});
+    const saved = localStorage.getItem('user');
+    return saved ? JSON.parse(saved) : null;
+  });
 
 
 
@@ -266,12 +271,12 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
           return true;
         });
         if (!offlineToastId.current) {
-          const message = reason === 'network' 
-            ? 'Network Paused: Please check your internet connection.' 
+          const message = reason === 'network'
+            ? 'Network Paused: Please check your internet connection.'
             : 'Sync Paused: Reconnecting to your local hardware server...';
-          offlineToastId.current = toast.error(message, { 
+          offlineToastId.current = toast.error(message, {
             id: 'offline-sync-error',
-            duration: Infinity 
+            duration: Infinity
           });
         }
       } else {
@@ -295,13 +300,13 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
       try {
         const controller = new AbortController();
         const id = setTimeout(() => controller.abort(), 5000); // Increased timeout
-        const res = await fetch(`${API_BASE_URL}/health`, { 
+        const res = await fetch(`${API_BASE_URL}/health`, {
           method: 'GET',
-          signal: controller.signal, 
-          cache: 'no-cache' 
+          signal: controller.signal,
+          cache: 'no-cache'
         });
         clearTimeout(id);
-        
+
         if (res.ok) {
           consecutiveServerFailures = 0;
           if (isServerDown.current) {
@@ -338,7 +343,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     };
   }, []);
 
-  // 📡 [HSM v2.4] Vanguard Session Re-validation
+  // 📡 [HSM v2.4] tredpos Session Re-validation
   // We synchronize the tenantStatus from the registry hub on every mount
   useEffect(() => {
     const syncSession = async () => {
@@ -372,7 +377,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
         if (err.message?.includes('ACCESS_DENIED') || err.message?.includes('suspended')) {
           setCurrentUser(prev => prev ? { ...prev, tenantStatus: 'suspended' } : null);
         } else {
-          console.warn("[Vanguard HQ] Session Synchronization Failure:", err);
+          console.warn("[TredPOS HQ] Session Synchronization Failure:", err);
         }
       }
     };
@@ -399,10 +404,10 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     // Format status for display: "SAVING_SALE" -> "Saving Sale"
     const displayStatus = status
       ? status
-          .replace(/\.\.\./g, '')
-          .split('_')
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(' ')
+        .replace(/\.\.\./g, '')
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+        .join(' ')
       : 'Processing';
 
 
@@ -442,7 +447,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
       setLoadingStatus('');
     }
   }, [isOffline]);
-  
+
   const updateProfilePicture = async (file: File) => {
     try {
       await withLoading('Uplinking Identity Image...', async () => {
@@ -646,7 +651,8 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
             fetchSales(sevenDaysAgo, today),
             fetchExpenses(sevenDaysAgo, today),
             fetchReturns(sevenDaysAgo, today),
-            fetchPromotions()
+            fetchPromotions(),
+            fetchHeldSales()
           ]);
 
           const { data } = await client.query({
@@ -670,7 +676,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
             }));
           }
         }
-        
+
         setIsReady(true);
       } catch (err) {
         console.error('Hydration error:', err);
@@ -752,7 +758,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
 
       if (data?.googleLogin) {
         localStorage.setItem('khms_token', data.googleLogin);
-        
+
         // HSM v2.4: Purge cache before session context switch
         await client.clearStore();
 
@@ -773,33 +779,34 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
 
   const logout = useCallback(() => {
     try {
-        localStorage.removeItem('khms_token');
-        localStorage.removeItem('khms_user');
-        setCurrentUser(null);
-        
-        // HSM v2.4 Scorched Earth: Clear all local state to avoid session leakage
-        setEmployees([]);
-        setProducts([]);
-        setSales([]);
-        setCustomers([]);
-        setSuppliers([]);
-        setExpenses([]);
-        setSettings({});
-        setActiveShift(null);
-        setAttendance([]);
-        setRoles([]);
-        setPromotions([]);
-        setSaleReturns([]);
-        setClassTeachers([]); // 🛡️ Institutional Academics Purge
-        setClasses([]); // 🛡️ Enrollment Purge
-        
-        // Purge Apollo Cache and reset link to ensure security partitioning
-        client.clearStore().catch(console.error);
-        client.setLink(uploadLink); 
+      localStorage.removeItem('khms_token');
+      localStorage.removeItem('khms_user');
+      setCurrentUser(null);
+
+      // HSM v2.4 Scorched Earth: Clear all local state to avoid session leakage
+      setEmployees([]);
+      setProducts([]);
+      setSales([]);
+      setCustomers([]);
+      setSuppliers([]);
+      setExpenses([]);
+      setSettings({});
+      setActiveShift(null);
+      setAttendance([]);
+      setRoles([]);
+      setPromotions([]);
+      setSaleReturns([]);
+      setHeldSales([]); // Transaction Parking Isolation
+      setClassTeachers([]); // Institutional Academics Purge
+      setClasses([]); // Enrollment Purge
+
+      // Purge Apollo Cache and reset link to ensure security partitioning
+      client.clearStore().catch(console.error);
+      client.setLink(uploadLink);
     } catch (error) {
-        console.error('[Scorched Earth] Logout cleanup error:', error);
-        // We still consider the user logged out since tokens are gone
-        setCurrentUser(null);
+      console.error('[Scorched Earth] Logout cleanup error:', error);
+      // We still consider the user logged out since tokens are gone
+      setCurrentUser(null);
     }
   }, []);
 
@@ -845,7 +852,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     }
   };
 
-   const retireProduct = async (id: string) => {
+  const retireProduct = async (id: string) => {
     try {
       await withLoading('RETIRING_PRODUCT', async () => {
         await client.mutate({
@@ -876,36 +883,101 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
 
   const isAddingSaleRef = React.useRef(false);
 
-  const addSale = async (s: Omit<Sale, 'id' | 'timestamp'> & { clientTxId?: string }) => {
+  const fetchHeldSales = useCallback(async () => {
+    try {
+      const { data } = await client.query({
+        query: GET_HELD_SALES,
+        fetchPolicy: 'network-only'
+      });
+      if (data?.heldSales) setHeldSales(data.heldSales);
+    } catch (err) {
+      console.error('Fetch held sales error:', err);
+    }
+  }, [client]);
+
+  const refreshHeldSales = useCallback(async (silent = true) => {
+    try {
+      await withLoading(silent ? undefined : 'SYNCING_PARKED_TRANSACTIONS', async () => {
+        await fetchHeldSales();
+      }, false);
+      if (!silent) toast.info('Parked transactions synchronized');
+    } catch (err: any) {
+      console.error('refreshHeldSales error:', err);
+    }
+  }, [withLoading, fetchHeldSales]);
+
+  const holdTransaction = async (cart: string, customerId?: string, discount?: number) => {
+    try {
+      await withLoading('PARKING_TRANSACTION...', async () => {
+        await client.mutate({
+          mutation: HOLD_SALE,
+          variables: {
+            cart,
+            customerId: customerId || null,
+            discount: discount || 0,
+            cashierId: currentUser?.id || 'unknown'
+          }
+        });
+        await fetchHeldSales();
+      }, true);
+    } catch (err: any) {
+      console.error('holdTransaction error:', err);
+    }
+  };
+
+  const deleteHeldTransaction = async (id: string) => {
+    try {
+      await withLoading('PURGING_PARKED_RECORD...', async () => {
+        await client.mutate({
+          mutation: DELETE_HELD_SALE,
+          variables: { id }
+        });
+        await fetchHeldSales();
+      }, true);
+    } catch (err: any) {
+      console.error('deleteHeldTransaction error:', err);
+    }
+  };
+
+  const addSale = async (s: Omit<Sale, 'id' | 'timestamp'> & { clientTxId?: string; heldSaleId?: string }) => {
     if (isAddingSaleRef.current) return;
     isAddingSaleRef.current = true;
-    
+
     let saleResult: any = null;
     try {
+      const { total, subtotal, tax, discount, paymentMethod, customerId, cashierId, shiftId, items, promoId, promoName, clientTxId, heldSaleId } = s;
+
       await withLoading('RECORDING_SALE', async () => {
         const { data } = await client.mutate({
           mutation: ADD_SALE,
           variables: {
-            ...s,
-            shiftId: activeShift?.id,
-            items: s.items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.price }))
+            total, subtotal, tax, discount, paymentMethod, customerId,
+            cashierId: cashierId || currentUser?.id,
+            shiftId: shiftId || activeShift?.id,
+            promoId, promoName, clientTxId, heldSaleId,
+            items: items.map(i => ({ id: i.id, name: i.name, quantity: i.quantity, price: i.price }))
           }
         });
-        
+
         saleResult = data.addSale;
         setSales(prev => [saleResult, ...prev]);
         await fetchProducts(); // Refresh inventory stock immediately
-        if (s.paymentMethod === 'credit') {
+
+        if (paymentMethod === 'credit') {
           await fetchCustomers();
+        }
+
+        // If we processed a held sale, refresh the registry
+        if (heldSaleId) {
+          await fetchHeldSales();
         }
       }, true);
     } catch (err) {
       console.error('[addSale] Execution Failed:', err);
-      // withLoading already handled the toast message, we just prevent unhandled rejection here
     } finally {
       isAddingSaleRef.current = false;
     }
-    
+
     return saleResult;
   };
 
@@ -1042,7 +1114,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
         });
         await fetchExpenses();
         toast.success('EXPENSE_RECORD_VOIDED_AND_PRESERVED_IN_AUDIT');
-        
+
         addSystemLog({
           action: "EXPENSE_VOIDED",
           target: `EXPENSE_ID: ${id}`,
@@ -1166,7 +1238,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
 
   const getSystemTelemetry = useCallback(async () => {
     try {
-      const { data } = await client.query({ 
+      const { data } = await client.query({
         query: GET_SYSTEM_TELEMETRY,
         fetchPolicy: 'network-only'
       });
@@ -1189,7 +1261,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
 
   const testNotifications = useCallback(async (email: string) => {
     try {
-      await client.mutate({ 
+      await client.mutate({
         mutation: TEST_NOTIFICATION_SETTINGS,
         variables: { email }
       });
@@ -1579,34 +1651,6 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     }
   }, [withLoading, fetchReturns]);
 
-
-  const initAudio = useCallback(() => {
-    // Prime the audio context by playing a silent buffer on first user interaction
-    try {
-      const audio = new Audio('/sounds/select.mp3');
-      audio.volume = 0;
-      audio.play().then(() => {
-        console.log('[Audio] Sensory engine primed and authorized by browser.');
-      }).catch(() => {
-        // Expected if called without gesture, though we intend to call on gesture
-      });
-    } catch (err) {
-      console.warn('[Audio] Sensory priming deferred.');
-    }
-  }, []);
-
-  const playSound = useCallback((sound: 'cash' | 'select') => {
-    try {
-      const audio = new Audio(`/sounds/${sound}.mp3`);
-      console.log(`[Audio] Tactical trigger: ${sound} -> /sounds/${sound}.mp3`);
-      audio.play().catch(err => {
-        console.warn(`[Audio] Tactical playback blocked: ${err.message}. Institutional priming may be required.`);
-      });
-    } catch (err) {
-      console.error('[Audio] Institutional sound engine failure:', err);
-    }
-  }, []);
-
   const contextValue = useMemo(() => ({
     products, sales, customers, suppliers, expenses, employees, attendance, roles,
     currentUser, loading: globalLoading || empLoading, isReady, isOffline,
@@ -1655,14 +1699,13 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     isSalesLoading,
     withLoading,
     updateProfilePicture,
-    playSound,
-    initAudio,
+    heldSales, refreshHeldSales, holdTransaction, deleteHeldTransaction,
   }), [
     products, sales, customers, suppliers, expenses, employees, attendance, roles,
-    currentUser, globalLoading, empLoading, isReady, isOffline, 
+    currentUser, globalLoading, empLoading, isReady, isOffline,
     login, loginWithGoogle, logout, addProduct, updateProduct, retireProduct, adjustStock, addSale, addCustomer,
     updateCustomer, deleteCustomer, recordPayment, updateCustomerBalance, addExpense, deleteExpense,
-    addEmployee, updateEmployee, refreshEmployees, addRole, updateRole, deleteRole, recordAttendance, 
+    addEmployee, updateEmployee, refreshEmployees, addRole, updateRole, deleteRole, recordAttendance,
     initializeHR, initializeUserDB, initializeLogsDB, settings, updateSetting, initializeSettingsDB,
     addSupplier, updateSupplier, deleteSupplier, initializeInventoryDB,
     getInventoryTransactions, getCustomerPayments, getDailyDebtRecovered,
@@ -1674,8 +1717,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     customerPayments, refreshAllCustomerPayments, deleteCustomerPayment,
     getSystemTelemetry, backupDatabase, testNotifications, isSalesLoading, withLoading,
     updateProfilePicture,
-    playSound,
-    initAudio
+    heldSales, refreshHeldSales, holdTransaction, deleteHeldTransaction,
   ]);
 
   return (

@@ -101,6 +101,7 @@ export const INVENTORY_SCHEMA_SQL = [
       customer_id VARCHAR(36) NOT NULL,
       amount DECIMAL(15,2) NOT NULL,
       payment_method VARCHAR(50) DEFAULT 'cash',
+      shift_id VARCHAR(36),
       reference VARCHAR(100),
       notes TEXT,
       recorded_by VARCHAR(36),
@@ -118,6 +119,7 @@ export const INVENTORY_SCHEMA_SQL = [
       description TEXT,
       status VARCHAR(20) DEFAULT 'ACTIVE',
       authorized_by VARCHAR(36),
+      shift_id VARCHAR(36),
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       INDEX idx_category (category),
@@ -184,6 +186,79 @@ export const INVENTORY_SCHEMA_SQL = [
         updated_at DATETIME ON UPDATE CURRENT_TIMESTAMP,
         INDEX idx_active (is_active),
         INDEX idx_dates (start_date, end_date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS held_sales (
+        id VARCHAR(36) PRIMARY KEY,
+        cart JSON NOT NULL,
+        customer_id VARCHAR(36),
+        discount DECIMAL(15,2) DEFAULT 0.00,
+        cashier_id VARCHAR(36) NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_cashier (cashier_id),
+        INDEX idx_customer (customer_id),
+        INDEX idx_created (created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS mail_queue (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      to_address TEXT NOT NULL,
+      subject VARCHAR(255) NOT NULL,
+      from_name VARCHAR(255),
+      from_email VARCHAR(255),
+      html_body LONGTEXT,
+      text_body LONGTEXT,
+      attachments JSON,
+      status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
+      retry_count INT DEFAULT 0,
+      last_error TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS employees (
+      id VARCHAR(50) PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      role VARCHAR(100) NOT NULL,
+      phone VARCHAR(20) NOT NULL,
+      email VARCHAR(255),
+      salary DECIMAL(10, 2) DEFAULT 0.00,
+      status ENUM('active', 'on_leave', 'terminated') DEFAULT 'active',
+      joined_date DATE NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_role (role),
+      INDEX idx_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS attendance (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      employee_id VARCHAR(50) NOT NULL,
+      date DATE NOT NULL,
+      check_in DATETIME NOT NULL,
+      check_out DATETIME,
+      status ENUM('present', 'late', 'absent') DEFAULT 'present',
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+      INDEX idx_emp_date (employee_id, date),
+      INDEX idx_date (date)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  `,
+  `
+    CREATE TABLE IF NOT EXISTS payroll_records (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      employee_id VARCHAR(50) NOT NULL,
+      period_month TINYINT NOT NULL,
+      period_year SMALLINT NOT NULL,
+      gross_salary DECIMAL(10, 2) NOT NULL,
+      tax_deductions DECIMAL(10, 2) DEFAULT 0.00,
+      net_salary DECIMAL(10, 2) NOT NULL,
+      processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `
 ];

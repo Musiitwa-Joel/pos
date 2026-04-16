@@ -132,8 +132,8 @@ export default function ReturnsManagement() {
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1 overflow-hidden min-h-0">
         {/* LEFT: Stats & Chart */}
-        <div className="col-span-1 lg:col-span-4 flex flex-col gap-6 overflow-hidden">
-          <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-1 gap-4">
+        <div className="col-span-1 lg:col-span-4 flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-1">
+          <div className="flex flex-col gap-4">
             {[
               { label: 'TOTAL_REVENUE_REFUNDED', value: formatCurrency(totalRefunded), color: 'text-orange-600', icon: RotateCcw },
               { label: 'TRANSACTION_VOLUME', value: `${filteredReturns.length} RETURNS`, color: 'text-black dark:text-slate-300', icon: History },
@@ -150,29 +150,31 @@ export default function ReturnsManagement() {
             ))}
           </div>
 
-          <div className="industrial-panel flex-1 p-5 flex flex-col gap-4 border-brand-accent/10 min-h-[300px] lg:min-h-0">
+          <div className="industrial-panel p-5 flex flex-col gap-4 border-brand-accent/10">
             <h3 className="text-[10px] font-display text-slate-800 dark:text-slate-400 uppercase tracking-widest flex items-center gap-2">
               <TrendingUp size={12} className="text-brand-accent" /> Temporal_Refund_Metrics
             </h3>
-            <div className="flex-1 min-h-[200px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
-                  <defs>
-                    <linearGradient id="returnGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
-                  <XAxis dataKey="name" fontSize={8} axisLine={false} tickLine={false} stroke="#64748b" style={{ fontFamily: 'Michroma' }} />
-                  <YAxis fontSize={8} axisLine={false} tickLine={false} stroke="#64748b" tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} style={{ fontFamily: 'Michroma' }} />
-                  <Tooltip
-                    contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', fontSize: '9px', fontFamily: 'Michroma', color: '#f8fafc' }}
-                    itemStyle={{ color: '#f97316' }}
-                  />
-                  <Area type="monotone" dataKey="value" stroke="#f97316" fillOpacity={1} fill="url(#returnGradient)" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="overflow-x-auto custom-scrollbar pb-2">
+              <div className="h-[200px] min-w-[600px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={trendData}>
+                    <defs>
+                      <linearGradient id="returnGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#f97316" stopOpacity={0.2} />
+                        <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
+                    <XAxis dataKey="name" fontSize={8} axisLine={false} tickLine={false} stroke="#64748b" style={{ fontFamily: 'Michroma' }} />
+                    <YAxis fontSize={8} axisLine={false} tickLine={false} stroke="#64748b" tickFormatter={(v) => `${(v / 1000).toFixed(0)}K`} style={{ fontFamily: 'Michroma' }} />
+                    <Tooltip
+                      contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', fontSize: '9px', fontFamily: 'Michroma', color: '#f8fafc' }}
+                      itemStyle={{ color: '#f97316' }}
+                    />
+                    <Area type="monotone" dataKey="value" stroke="#f97316" fillOpacity={1} fill="url(#returnGradient)" strokeWidth={2} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
             </div>
           </div>
         </div>

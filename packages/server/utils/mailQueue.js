@@ -16,11 +16,9 @@ export const enqueueMail = async ({
   dbPool = null,
 }) => {
   try {
-    // 1. Identify Cluster DB for tenant SMTP isolation
-    let dbCluster = 'default';
-    if (dbPool && dbPool.pool && dbPool.pool.config && dbPool.pool.config.connectionConfig) {
-      dbCluster = dbPool.pool.config.connectionConfig.database || 'default';
-    }
+    // 1. Identify Target Registry
+    // If no dbPool is provided, we fallback to the default global pool (legacy support)
+    const targetDb = dbPool || db;
 
     // 2. Normalize Recipients
     const toAddress = Array.isArray(to) ? to.join(", ") : String(to);
@@ -40,17 +38,38 @@ export const enqueueMail = async ({
       }).filter(Boolean));
     }
 
-    // 4. Insert into Master Queue using the master DB pool
-    await db.execute(
-      `INSERT INTO mail_queue (to_address, subject, from_name, from_email, html_body, text_body, attachments, db_cluster, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
-      [toAddress, subject, fromName || null, fromEmail || null, html || null, text || null, serializedAttachments, dbCluster]
+    // 🛡️ Self-Healing Pre-flight: Ensure mail_queue table exists in this institution
+    try {
+      await targetDb.query(`
+        CREATE TABLE IF NOT EXISTS mail_queue (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          to_address TEXT NOT NULL,
+          subject VARCHAR(255) NOT NULL,
+          from_name VARCHAR(255),
+          from_email VARCHAR(255),
+          html_body LONGTEXT,
+          text_body LONGTEXT,
+          attachments JSON,
+          status ENUM('pending', 'sent', 'failed') DEFAULT 'pending',
+          retry_count INT DEFAULT 0,
+          last_error TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `);
+    } catch (e) { /* ignore if already exists */ }
+
+    // 4. Insert into Institutional Registry
+    await targetDb.execute(
+      `INSERT INTO mail_queue (to_address, subject, from_name, from_email, html_body, text_body, attachments, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [toAddress, subject, fromName || null, fromEmail || null, html || null, text || null, serializedAttachments]
     );
 
     return { queued: true };
   } catch (error) {
     console.error("[mailQueue] Failed to enqueue mail:", error.message);
-    // This is a failure of the persistence layer itself (e.g. DB full)
     return { queued: false, error: error.message };
   }
 };

@@ -97,8 +97,8 @@ export const DELETE_PRODUCT = gql`
 `;
 
 export const ADD_SALE = gql`
-  mutation AddSale($total: Float!, $subtotal: Float!, $tax: Float, $discount: Float, $paymentMethod: String!, $customerId: ID, $cashierId: ID, $shiftId: ID, $promoId: String, $promoName: String, $clientTxId: String, $items: [SaleItemInput!]!) {
-    addSale(total: $total, subtotal: $subtotal, tax: $tax, discount: $discount, paymentMethod: $paymentMethod, customerId: $customerId, cashierId: $cashierId, shiftId: $shiftId, promoId: $promoId, promoName: $promoName, clientTxId: $clientTxId, items: $items) {
+  mutation AddSale($total: Float!, $subtotal: Float!, $tax: Float, $discount: Float, $paymentMethod: String!, $customerId: ID, $cashierId: ID, $shiftId: ID, $promoId: String, $promoName: String, $clientTxId: String, $heldSaleId: String, $items: [SaleItemInput!]!) {
+    addSale(total: $total, subtotal: $subtotal, tax: $tax, discount: $discount, paymentMethod: $paymentMethod, customerId: $customerId, cashierId: $cashierId, shiftId: $shiftId, promoId: $promoId, promoName: $promoName, clientTxId: $clientTxId, heldSaleId: $heldSaleId, items: $items) {
       id
       total
       subtotal
@@ -119,6 +119,25 @@ export const ADD_SALE = gql`
         remainingStock
       }
     }
+  }
+`;
+
+export const HOLD_SALE = gql`
+  mutation HoldSale($cart: String!, $customerId: String, $discount: Float, $cashierId: String!) {
+    holdSale(cart: $cart, customerId: $customerId, discount: $discount, cashierId: $cashierId) {
+      id
+      cart
+      customerId
+      discount
+      cashierId
+      createdAt
+    }
+  }
+`;
+
+export const DELETE_HELD_SALE = gql`
+  mutation DeleteHeldSale($id: ID!) {
+    deleteHeldSale(id: $id)
   }
 `;
 

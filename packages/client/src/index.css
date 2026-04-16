@@ -535,6 +535,9 @@
   .z-\[101\] {
     z-index: 101;
   }
+  .z-\[110\] {
+    z-index: 110;
+  }
   .z-\[140\] {
     z-index: 140;
   }
@@ -898,6 +901,9 @@
   .h-\[100dvh\] {
     height: 100dvh;
   }
+  .h-\[200px\] {
+    height: 200px;
+  }
   .h-\[calc\(100vh-280px\)\] {
     height: calc(100vh - 280px);
   }
@@ -1191,6 +1197,9 @@
   }
   .min-w-0 {
     min-width: calc(var(--spacing) * 0);
+  }
+  .min-w-\[64px\] {
+    min-width: 64px;
   }
   .min-w-\[100px\] {
     min-width: 100px;
@@ -2508,6 +2517,12 @@
     background-color: var(--color-brand-dark);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--color-brand-dark) 60%, transparent);
+    }
+  }
+  .bg-brand-dark\/90 {
+    background-color: var(--color-brand-dark);
+    @supports (color: color-mix(in lab, red, red)) {
+      background-color: color-mix(in oklab, var(--color-brand-dark) 90%, transparent);
     }
   }
   .bg-brand-dark\/95 {
@@ -4453,6 +4468,13 @@
       }
     }
   }
+  .group-hover\:rotate-\[-45deg\] {
+    &:is(:where(.group):hover *) {
+      @media (hover: hover) {
+        rotate: -45deg;
+      }
+    }
+  }
   .group-hover\:gap-4 {
     &:is(:where(.group):hover *) {
       @media (hover: hover) {
@@ -5270,6 +5292,23 @@
         @supports (color: color-mix(in lab, red, red)) {
           background-color: color-mix(in oklab, var(--color-orange-500) 10%, transparent);
         }
+      }
+    }
+  }
+  .hover\:bg-orange-500\/30 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: color-mix(in srgb, oklch(70.5% 0.213 47.604) 30%, transparent);
+        @supports (color: color-mix(in lab, red, red)) {
+          background-color: color-mix(in oklab, var(--color-orange-500) 30%, transparent);
+        }
+      }
+    }
+  }
+  .hover\:bg-orange-600 {
+    &:hover {
+      @media (hover: hover) {
+        background-color: var(--color-orange-600);
       }
     }
   }

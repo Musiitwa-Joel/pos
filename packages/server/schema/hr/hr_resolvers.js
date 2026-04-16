@@ -124,6 +124,17 @@ const IndexGuard = async (db, tableName, indexName, columnDefinition) => {
 export default {
     Query: {
         employees: async (_, __, { db }) => {
+            // 🛡️ [VANGUARD] Institutional Self-Healing: Ensure employees registry exists
+            await SchemaGuard(db, 'employees', [
+                { name: 'name', type: 'VARCHAR(255)', extra: 'NOT NULL' },
+                { name: 'role', type: 'VARCHAR(100)', extra: 'NOT NULL' },
+                { name: 'phone', type: 'VARCHAR(20)', extra: 'NOT NULL' },
+                { name: 'email', type: 'VARCHAR(255)' },
+                { name: 'salary', type: 'DECIMAL(10,2)', extra: 'DEFAULT 0.00' },
+                { name: 'status', type: "ENUM('active', 'on_leave', 'terminated')", extra: "DEFAULT 'active'" },
+                { name: 'joined_date', type: 'DATE', extra: 'NOT NULL' }
+            ]);
+
             const [rows] = await db.query("SELECT * FROM employees ORDER BY created_at DESC");
             return rows.map(row => ({
                 ...row,
@@ -142,6 +153,15 @@ export default {
             };
         },
         attendanceLogs: async (_, { employeeId }, { db }) => {
+            // 🛡️ [VANGUARD] Institutional Self-Healing: Ensure attendance registry exists
+            await SchemaGuard(db, 'attendance', [
+                { name: 'employee_id', type: 'VARCHAR(50)', extra: 'NOT NULL' },
+                { name: 'date', type: 'DATE', extra: 'NOT NULL' },
+                { name: 'check_in', type: 'DATETIME', extra: 'NOT NULL' },
+                { name: 'check_out', type: 'DATETIME' },
+                { name: 'status', type: "ENUM('present', 'late', 'absent')", extra: "DEFAULT 'present'" }
+            ]);
+
             let query = "SELECT * FROM attendance";
             let params = [];
             if (employeeId) {

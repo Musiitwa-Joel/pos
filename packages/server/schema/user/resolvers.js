@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const DEFAULT_ADMIN_MODULES = ['dashboard', 'pos', 'inventory', 'credit', 'hr', 'sales', 'reports', 'suppliers', 'expenses', 'returns'];
 
 const USER_SCHEMA_SQL = [
     `CREATE TABLE IF NOT EXISTS users (
@@ -86,6 +87,11 @@ export default {
                 // Use primary role modules, otherwise fallback to employee assignment
                 const baseModules = primaryModules.length > 0 ? primaryModules : fallbackModules;
                 modules = [...new Set([...baseModules, ...userOverrides])];
+                
+                // 🛡️ Institutional Default Fallback (Restores access for legacy admins)
+                if (modules.length === 0 && (dbUser.role?.toUpperCase() === 'ADMIN' || dbUser.employee_role?.toUpperCase() === 'ADMIN')) {
+                    modules = DEFAULT_ADMIN_MODULES;
+                }
             } catch (e) {
                 console.error("Failed to parse module permissions:", e);
             }
@@ -124,6 +130,11 @@ export default {
                     const roleModules = dbUser.role_modules ? JSON.parse(dbUser.role_modules) : [];
                     const userModules = dbUser.authorized_modules ? JSON.parse(dbUser.authorized_modules) : [];
                     modules = [...new Set([...roleModules, ...userModules])];
+
+                    // 🛡️ Institutional Default Fallback (Synchronizes registry view for legacy admins)
+                    if (modules.length === 0 && dbUser.role?.toUpperCase() === 'ADMIN') {
+                        modules = DEFAULT_ADMIN_MODULES;
+                    }
                 } catch (e) {}
 
                 return {
@@ -239,6 +250,11 @@ export default {
                 const overrides = user.authorized_modules ? JSON.parse(user.authorized_modules) : [];
                 const base = primary.length > 0 ? primary : fallback;
                 initialModules = [...new Set([...base, ...overrides])];
+
+                // 🛡️ Institutional Default Fallback (Restores access for legacy admins during login)
+                if (initialModules.length === 0 && (user.role?.toUpperCase() === 'ADMIN' || user.employee_role?.toUpperCase() === 'ADMIN')) {
+                    initialModules = DEFAULT_ADMIN_MODULES;
+                }
             } catch (e) {
                 console.error("Token module calculation failure:", e);
             }
@@ -393,9 +409,14 @@ export default {
                     const overrides = user.authorized_modules ? JSON.parse(user.authorized_modules) : [];
                     const base = primary.length > 0 ? primary : fallback;
                     initialModules = [...new Set([...base, ...overrides])];
-                } catch (e) {
-                    console.error("Federated token module calculation failure:", e);
+
+                // 🛡️ Institutional Default Fallback (Restores access for legacy admins during Google login)
+                if (initialModules.length === 0 && (user.role?.toUpperCase() === 'ADMIN' || user.employee_role?.toUpperCase() === 'ADMIN')) {
+                    initialModules = DEFAULT_ADMIN_MODULES;
                 }
+            } catch (e) {
+                console.error("Federated token module calculation failure:", e);
+            }
 
                 // Generate HSM v2.4 Institutional JWT
                 const token = jwt.sign(

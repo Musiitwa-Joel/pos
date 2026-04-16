@@ -12,6 +12,8 @@ import {
   X,
   Receipt,
   Loader2,
+  PauseCircle,
+  Clock,
 } from "lucide-react";
 // @ts-ignore
 import { motion, AnimatePresence } from "motion/react";
@@ -43,8 +45,10 @@ export default function POS({ onExit }: { onExit?: () => void }) {
     isOffline,
     activeShift,
     isReady,
-    playSound,
-    initAudio,
+    holdTransaction,
+    refreshHeldSales,
+    heldSales,
+    deleteHeldTransaction,
   } = useHardware();
 
   const {
@@ -57,6 +61,8 @@ export default function POS({ onExit }: { onExit?: () => void }) {
     posDiscount: discount,
     setPosDiscount: setDiscount,
     clearPOS,
+    resumedHeldSaleId,
+    setResumedHeldSaleId,
   } = usePOS();
   const [searchQuery, setSearchQuery] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
@@ -74,6 +80,7 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   const [shiftStats, setShiftStats] = useState<any>(null);
   const [isFetchingStats, setIsFetchingStats] = useState(false);
   const [vetoedPromoIds, setVetoedPromoIds] = useState<string[]>([]);
+  const [showHeldSales, setShowHeldSales] = useState(false);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -152,7 +159,6 @@ export default function POS({ onExit }: { onExit?: () => void }) {
   }, [currentUser?.id, activeShift, isReady]);
 
   const handleOpenShift = async () => {
-    initAudio(); // Priming the institutional sensory engine upon terminal activation
     const cash = parseFloat(openingCashInput) || 0;
     await openShift(cash);
     setShowOpeningModal(false);
@@ -202,7 +208,6 @@ export default function POS({ onExit }: { onExit?: () => void }) {
       }
       return [...prev, { ...product, quantity: 1, discount: 0 }];
     });
-    playSound('select');
     setSearchQuery("");
   };
 
@@ -320,10 +325,10 @@ export default function POS({ onExit }: { onExit?: () => void }) {
         promoId: refinedPromoId,
         promoName: refinedPromoName,
         clientTxId,
+        heldSaleId: resumedHeldSaleId || undefined,
       });
 
       if (result) {
-        playSound('cash');
         setLastSale(result);
         setIsSuccess(true);
 
@@ -342,10 +347,38 @@ export default function POS({ onExit }: { onExit?: () => void }) {
         }, 5000);
       }
     } catch (e) {
-      // HardwareContext handles toast errors
+      console.error('[handleCompleteSale] failure:', e);
     } finally {
       setIsProcessing(false);
       isProcessingRef.current = false;
+    }
+  };
+
+  const handleHoldSale = async () => {
+    if (cart.length === 0 || isOffline) return;
+    try {
+      await holdTransaction(
+        JSON.stringify(cart),
+        selectedCustomerId || undefined,
+        discount
+      );
+      clearPOS();
+    } catch (e) {
+      console.error('[handleHoldSale] Failure:', e);
+    }
+  };
+
+  const handleResumeSale = (held: any) => {
+    try {
+      const restoredItems = JSON.parse(held.cart);
+      setCart(restoredItems);
+      setSelectedCustomerId(held.customerId || '');
+      setDiscount(held.discount || 0);
+      setResumedHeldSaleId(held.id);
+      setShowHeldSales(false);
+      toast.success('TRANSACTION_RESUMED_FROM_PARKING_REGISTRY');
+    } catch (e) {
+      toast.error('RESUME_FAILED: MALFORMED_CART_STATE');
     }
   };
 
@@ -515,6 +548,102 @@ export default function POS({ onExit }: { onExit?: () => void }) {
         </div>
       )}
 
+      {/* [VANGUARD] Parked Sales Recovery Portal */}
+      <AnimatePresence>
+        {showHeldSales && (
+          <div className="absolute inset-0 z-[101] bg-brand-dark/95 backdrop-blur-xl flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="industrial-panel w-full max-w-2xl flex flex-col max-h-[80vh] bg-[var(--bg-panel)]"
+            >
+              <div className="industrial-panel-header">
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-brand-accent" />
+                  <span className="text-[10px] font-display uppercase tracking-widest">
+                    Parked_Transaction_Registry
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setShowHeldSales(false)}
+                  className="p-1 hover:text-brand-accent transition-colors"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+                {heldSales.length === 0 ? (
+                  <div className="h-64 flex flex-col items-center justify-center text-slate-700 opacity-40 grayscale">
+                    <PauseCircle size={48} strokeWidth={1} />
+                    <p className="text-[10px] font-display tracking-[0.2em] uppercase mt-4">
+                      Registry_Empty_No_Parked_Sales_Found
+                    </p>
+                  </div>
+                ) : (
+                  heldSales.map((held) => {
+                    let itemsPreview = [];
+                    try {
+                      itemsPreview = JSON.parse(held.cart);
+                    } catch (e) {
+                      console.error('Cart parse failed:', e);
+                    }
+                    
+                    return (
+                      <div 
+                        key={held.id} 
+                        className="bg-brand-dark border border-brand-steel/50 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 group hover:border-brand-accent transition-all animate-in fade-in slide-in-from-bottom-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-1">
+                            <span className="text-brand-accent font-mono text-[10px] uppercase tracking-tighter">
+                              TX_ID: {held.id.slice(-8).toUpperCase()}
+                            </span>
+                            <span className="text-slate-500 font-mono text-[9px]">
+                              {new Date(held.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-slate-800 dark:text-slate-400 uppercase font-display leading-tight line-clamp-1">
+                            {itemsPreview.length} items: {itemsPreview.map((i: any) => `${i.quantity}x ${i.name}`).join(', ')}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            onClick={() => deleteHeldTransaction(held.id)}
+                            className="p-2 border border-brand-steel text-danger hover:bg-danger/10 transition-all rounded"
+                            title="Discard Transaction"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleResumeSale(held)}
+                            className="btn-industrial btn-primary px-4 py-2 text-[8px] font-display uppercase tracking-widest"
+                          >
+                            Resume_Sale
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              <div className="p-4 border-t border-brand-steel bg-black/10 flex justify-between items-center">
+                <span className="text-[8px] font-mono text-slate-500 uppercase tracking-widest">
+                  Total_Parked_Capacity: {heldSales.length} Transactions
+                </span>
+                <button 
+                  onClick={() => refreshHeldSales(false)}
+                  className="text-[8px] font-display text-brand-accent hover:underline uppercase tracking-widest"
+                >
+                  Force_Registry_Sync
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       <div className="flex-1 flex flex-col lg:flex-row gap-1 min-h-0 bg-brand-steel/20 p-1 overflow-hidden relative">
         {/* COLUMN 1: PRODUCT SELECTION */}
         <div
@@ -531,9 +660,23 @@ export default function POS({ onExit }: { onExit?: () => void }) {
                   Product_Catalog
                 </span>
               </div>
-              <span className="keyboard-hint shrink-0 whitespace-nowrap text-[8px] opacity-90 dark:opacity-60">
-                ^ F TO SEARCH
-              </span>
+              <div className="flex items-center gap-2">
+                {heldSales.length > 0 && (
+                  <button
+                    onClick={() => {
+                      refreshHeldSales(false);
+                      setShowHeldSales(true);
+                    }}
+                    className="flex items-center gap-1.5 px-2 py-0.5 bg-brand-accent/20 border border-brand-accent/40 text-brand-accent hover:bg-brand-accent hover:text-white transition-all rounded text-[8px] font-display uppercase animate-pulse"
+                  >
+                    <Clock size={10} />
+                    <span>PARKED_SALES: {heldSales.length}</span>
+                  </button>
+                )}
+                <span className="keyboard-hint shrink-0 whitespace-nowrap text-[8px] opacity-90 dark:opacity-60">
+                  ^ F TO SEARCH
+                </span>
+              </div>
             </div>
 
             <div className="p-2 border-b border-brand-steel bg-black/5">
@@ -948,40 +1091,54 @@ export default function POS({ onExit }: { onExit?: () => void }) {
                   </div>
                 </div>
 
-                <button
-                  onClick={handleCompleteSale}
-                  disabled={
-                    cart.length === 0 || isProcessing || isSuccess || isOffline
-                  }
-                  className={cn(
-                    "btn-industrial py-5 w-full flex items-center justify-center gap-3 text-[11px] font-display tracking-[0.2em] transition-all border-brand-steel/30",
-                    cart.length === 0 || isProcessing || isSuccess || isOffline
-                      ? "bg-brand-steel/10 text-slate-900 dark:text-slate-500 cursor-not-allowed opacity-80 dark:opacity-50 grayscale"
-                      : "btn-primary shadow-[0_0_30px_rgba(249,115,22,0.2)] text-white",
-                  )}
-                >
-                  {isOffline ? (
-                    <>
-                      <X size={16} />
-                      LOCAL_BUFFER_LOCKED
-                    </>
-                  ) : isProcessing ? (
-                    <>
-                      <Loader2 size={16} className="animate-spin" />
-                      PROCESS_TX...
-                    </>
-                  ) : isSuccess ? (
-                    <>
-                      <Receipt size={16} />
-                      TX_AUTHORIZED
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard size={18} />
-                      AUTHORIZE_CHECKOUT
-                    </>
-                  )}
-                </button>
+                <div className="flex items-stretch gap-1">
+                  <button
+                    onClick={handleHoldSale}
+                    disabled={cart.length === 0 || isOffline || isProcessing || isSuccess}
+                    className="flex flex-col items-center justify-center px-4 bg-brand-dark border border-brand-steel/30 text-slate-800 dark:text-slate-400 hover:text-brand-accent hover:border-brand-accent transition-all disabled:opacity-30 shrink-0 min-w-[64px]"
+                    title="Park Transaction (Hold)"
+                  >
+                    <PauseCircle size={20} />
+                    <span className="text-[7px] font-display uppercase tracking-widest mt-1.5">
+                      HOLD
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={handleCompleteSale}
+                    disabled={
+                      cart.length === 0 || isProcessing || isSuccess || isOffline
+                    }
+                    className={cn(
+                      "btn-industrial py-5 flex-1 flex items-center justify-center gap-3 text-[11px] font-display tracking-[0.2em] transition-all border-brand-steel/30 min-h-full",
+                      cart.length === 0 || isProcessing || isSuccess || isOffline
+                        ? "bg-brand-steel/10 text-slate-900 dark:text-slate-500 cursor-not-allowed opacity-80 dark:opacity-50 grayscale"
+                        : "btn-primary shadow-[0_0_30px_rgba(249,115,22,0.2)] text-white",
+                    )}
+                  >
+                    {isOffline ? (
+                      <>
+                        <X size={16} />
+                        LOCAL_BUFFER_LOCKED
+                      </>
+                    ) : isProcessing ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        PROCESS_TX...
+                      </>
+                    ) : isSuccess ? (
+                      <>
+                        <Receipt size={16} />
+                        TX_AUTHORIZED
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard size={18} />
+                        {resumedHeldSaleId ? "FINALIZE_PARKED_TX" : "AUTHORIZE_CHECKOUT"}
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

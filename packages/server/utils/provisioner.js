@@ -11,12 +11,12 @@ import { sendMail } from "./mailer.js";
 
 export const provisionInstitution = async (tenantData, password) => {
   const { id, name, db_name, owner_email } = tenantData;
-  console.log(`[Vanguard Factory] Initializing Institutional Setup for: ${name} (${db_name})`);
+  console.log(`[Tredpos Factory] Initializing Institutional Setup for: ${name} (${db_name})`);
 
   try {
     // 1. Create the dedicated database
     await db.query(`CREATE DATABASE IF NOT EXISTS \`${db_name}\``);
-    console.log(`[Vanguard Factory] Database Provisioned: ${db_name}`);
+    console.log(`[Tredpos Factory] Database Provisioned: ${db_name}`);
 
     // 2. Get the new tenant pool to run schemas
     const tenantPool = getTenantPool(db_name);
@@ -109,55 +109,55 @@ export const provisionInstitution = async (tenantData, password) => {
     for (const sql of SCHEMAS) {
       await tenantPool.query(sql);
     }
-    console.log(`[Vanguard Factory] Institutional Schema Deployed.`);
+    console.log(`[Tredpos Factory] Institutional Schema Deployed.`);
 
-    // 4. Institutional Role Migration (Pre-approved Static Data)
+    // 4. Institutional Identity Seeding (Strict Isolation)
     try {
-      // Migrate from current 'tred_hardware' database - ensures standard security groups are available
-      await tenantPool.query(`INSERT IGNORE INTO \`${db_name}\`.roles (id, name, description, authorized_modules) SELECT id, name, description, authorized_modules FROM \`tred_hardware\`.roles`);
-      
-      // 🛡️ Security Anchor: Force ADMIN role to have all laboratory modules attached
+      // 🛡️ [VANGUARD] Institutional Hardening: Only provision the Master ADMIN role. 
+      // Zero-cloning protocol ensures no data leak between business clusters.
+      const adminRoleId = uuidv7();
       const allModules = ['dashboard', 'pos', 'inventory', 'credit', 'hr', 'sales', 'reports', 'suppliers', 'expenses', 'returns', 'settings'];
-      await tenantPool.query(
-        `UPDATE \`${db_name}\`.roles SET authorized_modules = ? WHERE name = 'ADMIN' OR id = 'admin'`,
-        [JSON.stringify(allModules)]
-      );
       
-      console.log(`[Vanguard Factory] Institutional Roles Synchronized and Admin Hardened.`);
+      await tenantPool.query(
+        `INSERT INTO \`${db_name}\`.roles (id, name, description, authorized_modules) VALUES (?, ?, ?, ?)`,
+        [adminRoleId, 'ADMIN', 'Institutional Administrator with full access rights', JSON.stringify(allModules)]
+      );
+
+      console.log(`[Tredpos Factory] Institutional Admin Identity Provisioned and Isolated.`);
     } catch (err) {
-      console.warn(`[Vanguard Factory] Role Migration Warning: ${err.message}`);
+      console.warn(`[Tredpos Factory] Identity Seeding Warning: ${err.message}`);
     }
 
     // 5. Provision the Master Institutional Administrator
     const adminId = randomUUID();
     const passwordHash = await bcrypt.hash(password, 10);
-    
+
     await tenantPool.query(
       `INSERT INTO \`${db_name}\`.users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, 'ADMIN')`,
       [adminId, owner_email, owner_email, passwordHash]
     );
-    console.log(`[Vanguard Factory] Institutional Administrator Provisioned.`);
+    console.log(`[Tredpos Factory] Institutional Administrator Provisioned.`);
 
     // 5.5 Seed Institutional Metadata into Settings (Institutional Identity Core)
     const { physical_location, support_phone } = tenantData;
     const settingsToSeed = [
-        ['COMPANY_NAME', name],
-        ['LOCATION', physical_location || ''],
-        ['SUPPORT_PHONE', support_phone || ''],
-        ['CONTACT_EMAIL', owner_email],
-        ['CURRENCY', 'UGX'],
-        ['CURRENCY_SYMBOL', 'UGX (UGANDAN SHILLING)']
+      ['COMPANY_NAME', name],
+      ['LOCATION', physical_location || ''],
+      ['SUPPORT_PHONE', support_phone || ''],
+      ['CONTACT_EMAIL', owner_email],
+      ['CURRENCY', 'UGX'],
+      ['CURRENCY_SYMBOL', 'UGX (UGANDAN SHILLING)']
     ];
 
     for (const [key, val] of settingsToSeed) {
-        await tenantPool.query(
-            "INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?",
-            [key, val, val]
-        );
+      await tenantPool.query(
+        "INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = ?",
+        [key, val, val]
+      );
     }
-    console.log(`[Vanguard Factory] Institutional Metadata Seeded.`);
+    console.log(`[Tredpos Factory] Institutional Metadata Seeded.`);
 
-    // 6. Send Vanguard Welcome Communication
+    // 6. Send Tredpos Welcome Communication
     try {
       await sendMail({
         to: owner_email,
@@ -174,22 +174,22 @@ export const provisionInstitution = async (tenantData, password) => {
               <p>At TREDPOS Industries, our goal is to streamline your business processes—particularly in areas such as sales management, inventory tracking, and financial reporting—so you can focus on growth and delivering value to your customers.</p>
               <p>Our team is committed to ensuring a smooth onboarding experience. Should you require any assistance, guidance, or customization, please do not hesitate to reach out. We are here to support you every step of the way.</p>
               <p>Once again, welcome to TREDPOS Industries. We look forward to a successful and long-lasting partnership.</p>
-              <p>Warm regards,<br>The Vanguard Deployment Team</p>
+              <p>Warm regards,<br>The Tredpos Deployment Team</p>
             </div>
             <div style="background: #f4f4f4; padding: 10px; text-align: center; font-size: 10px; color: #999;">
-              This is an automated system communication from HSM v2.4 Vanguard Factory.
+              This is an automated system communication from HSM v2.4 Tredpos Factory.
             </div>
           </div>
         `
       });
-      console.log(`[Vanguard Factory] Welcome Communication Dispatched to ${owner_email}.`);
+      console.log(`[Tredpos Factory] Welcome Communication Dispatched to ${owner_email}.`);
     } catch (mailErr) {
-      console.error(`[Vanguard Factory] Communication Failure:`, mailErr.message);
+      console.error(`[Tredpos Factory] Communication Failure:`, mailErr.message);
     }
 
     return { success: true, db_name };
   } catch (err) {
-    console.error(`[Vanguard Factory] Institutional Deployment Critical Failure:`, err.message);
+    console.error(`[Tredpos Factory] Institutional Deployment Critical Failure:`, err.message);
     throw new Error(`Factory Failure: ${err.message}`);
   }
 };

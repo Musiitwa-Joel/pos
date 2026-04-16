@@ -77,7 +77,7 @@ export default function App() {
   const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_CLIENT_ID) || "531837744865-9ggk92vnkmbpha1sibu3hulfosuk0j0r.apps.googleusercontent.com";
 
   React.useEffect(() => {
-    console.log('IDENTITY_LOAD:', googleClientId);
+    // console.log('IDENTITY_LOAD:', googleClientId);
   }, [googleClientId]);
 
   return (

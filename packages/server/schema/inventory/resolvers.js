@@ -570,6 +570,18 @@ export default {
       } catch (err) { return null; }
     },
     getShiftExpected: async (_, { id }, { db }) => {
+      // 🛡️ Pre-Flight: Institutional Registry Alignment (Self-Healing)
+      try {
+        await db.query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER cashier_id");
+        await db.query("ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER payment_method");
+        await db.query("ALTER TABLE sale_returns ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER authorized_by");
+      } catch (e) {
+        // Fallback for MySQL versions without ADD COLUMN IF NOT EXISTS
+        try { await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id"); } catch (ne) {}
+        try { await db.query("ALTER TABLE customer_payments ADD COLUMN shift_id VARCHAR(36) AFTER payment_method"); } catch (ne) {}
+        try { await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by"); } catch (ne) {}
+      }
+
       try {
         const [shiftRows] = await db.query("SELECT * FROM cashier_shifts WHERE id = ?", [id]);
         if (shiftRows.length === 0) throw new Error("Shift not found");
@@ -602,6 +614,7 @@ export default {
         return {
           ...shift,
           id,
+          cashierId: shift.cashier_id,
           startTime: shift.start_time?.toISOString(),
           openingCash: parseFloat(shift.opening_cash),
           expectedCash,
@@ -1020,7 +1033,7 @@ export default {
       return id;
     },
     addSale: async (_, args, { db, user }) => {
-      const { total, subtotal, tax, discount, paymentMethod, customerId, cashierId, shiftId, items, promoId, promoName, clientTxId } = args;
+      const { total, subtotal, tax, discount, paymentMethod, customerId, cashierId, shiftId, items, promoId, promoName, clientTxId, heldSaleId } = args;
 
       // 🛡️ IDEMPOTENCY GUARD: Use Client-side ID first, fallback to content-fingerprint
       const fingerprint = clientTxId || JSON.stringify({
@@ -1061,6 +1074,12 @@ export default {
       await connection.beginTransaction();
 
       try {
+        // [VANGUARD] AUTOMATED DECOMMISSIONING: Purge Held Sale Registry if this is a restored transaction
+        if (heldSaleId) {
+          await connection.query("DELETE FROM held_sales WHERE id = ?", [heldSaleId]);
+          // console.log(`[TredPOS Security] Decommissioned Parked Transaction: ${heldSaleId}`);
+        }
+
         // Enforce Credit Limit Policy
         if (paymentMethod === 'credit' && customerId) {
           const [cRows] = await connection.query("SELECT name, balance, credit_limit FROM customers WHERE id = ?", [customerId]);
@@ -1525,6 +1544,18 @@ export default {
       return { id, cashierId, startTime: new Date().toISOString(), openingCash, status: 'OPEN' };
     },
     closeShift: async (_, { id, actualCash }, { db }) => {
+      // 🛡️ Pre-Flight: Institutional Registry Alignment (Self-Healing)
+      try {
+        await db.query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER cashier_id");
+        await db.query("ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER payment_method");
+        await db.query("ALTER TABLE sale_returns ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER authorized_by");
+      } catch (e) {
+        // Fallback for MySQL versions where ADD COLUMN IF NOT EXISTS is not supported
+        try { await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id"); } catch (ne) {}
+        try { await db.query("ALTER TABLE customer_payments ADD COLUMN shift_id VARCHAR(36) AFTER payment_method"); } catch (ne) {}
+        try { await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by"); } catch (ne) {}
+      }
+
       const [shiftRows] = await db.query("SELECT * FROM cashier_shifts WHERE id = ?", [id]);
       if (shiftRows.length === 0) throw new Error("Shift not found");
       const shift = shiftRows[0];
