@@ -5,6 +5,7 @@ import { useHardware } from '../HardwareContext';
 import { Role } from '../types';
 import Select from './Select';
 import { toast } from 'sonner';
+import ConfirmDialog from './ConfirmDialog';
 
 type SettingsSection = 'GENERAL' | 'ROLES' | 'SECURITY' | 'DATABASE' | 'ADVANCED';
 
@@ -24,6 +25,7 @@ export default function SettingsView() {
   const [newRoleDesc, setNewRoleDesc] = useState('');
   const [telemetry, setTelemetry] = useState<any>(null);
   const [editingRole, setEditingRole] = useState<Role | null>(null);
+  const [roleToDelete, setRoleToDelete] = useState<Role | null>(null);
 
   const MODULES = [
     { id: 'dashboard', label: 'INTELLIGENCE (DASHBOARD)' },
@@ -322,7 +324,7 @@ export default function SettingsView() {
                                         MANAGE
                                       </button>
                                       <button
-                                        onClick={() => deleteRole(role.id)}
+                                        onClick={() => setRoleToDelete(role)}
                                         className="text-danger hover:underline text-[8px] font-display"
                                       >
                                         REMOVE
@@ -566,6 +568,19 @@ export default function SettingsView() {
 
         </div>
       </div>
+      
+      {/* 🛡️ Institutional Confirmation Handshake Area */}
+      <ConfirmDialog
+        isOpen={!!roleToDelete}
+        onClose={() => setRoleToDelete(null)}
+        onConfirm={async () => {
+          if (roleToDelete) await deleteRole(roleToDelete.id);
+        }}
+        title="AUTHORIZE_ROLE_DELETION"
+        message={`Are you absolutely sure you want to decommission the '${roleToDelete?.name}' institutional identity? This action will immediately invalidate all security mappings for users assigned to this role.`}
+        confirmText="DECOMMISSION_ROLE"
+        type="danger"
+      />
     </div>
   );
 }
