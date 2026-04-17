@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
-import { Zap, Menu, X, Globe, Star, CheckCircle2, ArrowRight, Eye, EyeOff } from 'lucide-react';
+import { Zap, Menu, X, Globe, Star, CheckCircle2, ArrowRight, Eye, EyeOff, Facebook, Instagram, Twitter } from 'lucide-react';
 import wordLogo from '../../assets/SVG/wordlogo.svg';
 import fullLogo from '../../assets/SVG/fulllogo.svg';
 import { cn } from '../lib/utils';
@@ -305,9 +305,28 @@ export default function AppLayout() {
                   The world's most advanced retail operating system. Built for the next generation of global commerce.
                 </p>
                 <div className="flex gap-4 md:gap-6">
-                  {["Twitter", "GitHub", "LinkedIn"].map(social => (
-                    <a key={social} href="#" className="w-12 h-12 md:w-14 md:h-14 neo-border bg-black text-white flex items-center justify-center hover:bg-neo-orange transition-colors shadow-[6px_6px_0px_0px_rgba(255,107,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px]">
-                      <Globe size={20} className="md:size-6" />
+                  {[
+                    { name: "Facebook", icon: Facebook, href: "https://facebook.com/tredpos" },
+                    { 
+                      name: "X", 
+                      icon: (props: any) => (
+                        <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+                          <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932L18.901 1.153zM17.61 20.644h2.039L6.486 3.24H4.298L17.61 20.644z" />
+                        </svg>
+                      ), 
+                      href: "https://x.com/tredpos" 
+                    },
+                    { name: "Instagram", icon: Instagram, href: "https://instagram.com/tredpos" }
+                  ].map(social => (
+                    <a 
+                      key={social.name} 
+                      href={social.href} 
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={social.name}
+                      className="w-12 h-12 md:w-14 md:h-14 neo-border bg-black text-white flex items-center justify-center hover:bg-neo-orange transition-colors shadow-[6px_6px_0px_0px_rgba(255,107,0,1)] hover:shadow-none hover:translate-x-[6px] hover:translate-y-[6px]"
+                    >
+                      <social.icon size={20} className="md:size-6" />
                     </a>
                   ))}
                 </div>
@@ -317,8 +336,8 @@ export default function AppLayout() {
                 <div>
                   <h4 className="text-neo-orange font-black uppercase tracking-widest text-xs mb-8">Product</h4>
                   <ul className="space-y-4 font-bold">
-                    {["Features", "Pricing", "Case Studies", "Reviews", "Updates"].map(item => (
-                      <li key={item}><Link to={`/${item.toLowerCase().replace(/ /g, '-')}`} className="text-black/60 hover:text-neo-orange transition-colors">{item}</Link></li>
+                    {["Features", "Pricing", "Case Studies", "Reviews", "Updates", "Change Log"].map(item => (
+                      <li key={item}><Link to={item === "Change Log" ? "/changelog" : `/${item.toLowerCase().replace(/ /g, '-')}`} className="text-black/60 hover:text-neo-orange transition-colors">{item}</Link></li>
                     ))}
                   </ul>
                 </div>

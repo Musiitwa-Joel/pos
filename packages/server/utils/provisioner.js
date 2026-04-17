@@ -103,7 +103,74 @@ export const provisionInstitution = async (tenantData, password) => {
         shift_id VARCHAR(50),
         recorded_by VARCHAR(50),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      ) ENGINE=MyISAM`
+      ) ENGINE=MyISAM`,
+      `CREATE TABLE IF NOT EXISTS blog_posts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(512) NOT NULL,
+        slug VARCHAR(512) UNIQUE NOT NULL,
+        content LONGTEXT NOT NULL,
+        image_url TEXT,
+        excerpt TEXT,
+        author VARCHAR(255),
+        category VARCHAR(255),
+        is_draft BOOLEAN DEFAULT TRUE,
+        published_at TIMESTAMP NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_slug (slug),
+        INDEX idx_published (published_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+      `CREATE TABLE IF NOT EXISTS reviews (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        role VARCHAR(255),
+        company VARCHAR(255),
+        content TEXT NOT NULL,
+        avatar_url TEXT,
+        rating INT DEFAULT 5,
+        impact VARCHAR(255),
+        is_featured BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_featured (is_featured)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+      `CREATE TABLE IF NOT EXISTS case_studies (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(512) NOT NULL,
+        slug VARCHAR(512) UNIQUE NOT NULL,
+        client_name VARCHAR(255),
+        industry VARCHAR(255),
+        metric VARCHAR(255),
+        metric_label VARCHAR(255),
+        content LONGTEXT NOT NULL,
+        image_url TEXT,
+        is_featured BOOLEAN DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_slug (slug),
+        INDEX idx_featured (is_featured)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+      `CREATE TABLE IF NOT EXISTS about_sections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        section_type ENUM('TIMELINE', 'TEAM', 'HERO', 'VALUE', 'GENERAL') NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        subtitle VARCHAR(255),
+        content TEXT,
+        image_url TEXT,
+        icon_name VARCHAR(255),
+        order_index INT DEFAULT 0,
+        is_active BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_order (order_index)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+      `CREATE TABLE IF NOT EXISTS press_releases (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(512) NOT NULL,
+        source VARCHAR(255),
+        link TEXT,
+        excerpt TEXT,
+        published_date DATE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_date (published_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
     ];
 
     for (const sql of SCHEMAS) {

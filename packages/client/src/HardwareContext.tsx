@@ -194,7 +194,7 @@ const uploadLink = createUploadLink({
 });
 
 const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('khms_token');
   return {
     headers: {
       ...headers,
@@ -249,7 +249,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
   const [classes, setClasses] = useState<any[]>([]);
 
   const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('user');
+    const saved = localStorage.getItem('khms_user');
     return saved ? JSON.parse(saved) : null;
   });
 
@@ -347,7 +347,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
   // We synchronize the tenantStatus from the registry hub on every mount
   useEffect(() => {
     const syncSession = async () => {
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('khms_token');
       if (!token) return;
 
       try {
@@ -689,9 +689,10 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     localStorage.setItem('expenses', JSON.stringify(expenses));
     localStorage.setItem('promotions', JSON.stringify(promotions));
     if (currentUser) {
-      localStorage.setItem('user', JSON.stringify(currentUser));
+      localStorage.setItem('khms_user', JSON.stringify(currentUser));
     } else {
-      localStorage.removeItem('user');
+      localStorage.removeItem('khms_user');
+      localStorage.removeItem('user'); // Cleanup legacy artifact
     }
   }, [expenses, currentUser, promotions]);
 
@@ -714,7 +715,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
 
       if (data?.login) {
         const token = data.login;
-        localStorage.setItem('token', token);
+        localStorage.setItem('khms_token', token);
 
         // HSM v2.4: Purge cache before session context switch
         await client.clearStore();
@@ -781,6 +782,8 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
     try {
       localStorage.removeItem('khms_token');
       localStorage.removeItem('khms_user');
+      localStorage.removeItem('token'); // Scorched Earth: Purge legacy
+      localStorage.removeItem('user');  // Scorched Earth: Purge legacy
       setCurrentUser(null);
 
       // HSM v2.4 Scorched Earth: Clear all local state to avoid session leakage

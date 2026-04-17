@@ -10,10 +10,108 @@ import { registryPool, getTenantPool } from "../config/config.js";
 export const REGISTRY_SCHEMA_SQL = [
   `CREATE TABLE IF NOT EXISTS billing_plans (
     id VARCHAR(50) PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    monthly_fee DECIMAL(10,2) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    monthly_fee DECIMAL(15,2) NOT NULL,
     features TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_blog_posts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(512) NOT NULL,
+    slug VARCHAR(512) UNIQUE NOT NULL,
+    content LONGTEXT NOT NULL,
+    image_url TEXT,
+    excerpt TEXT,
+    author VARCHAR(255),
+    category VARCHAR(255),
+    is_draft BOOLEAN DEFAULT TRUE,
+    published_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_reviews (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    role VARCHAR(255),
+    company VARCHAR(255),
+    content TEXT NOT NULL,
+    avatar_url TEXT,
+    rating INT DEFAULT 5,
+    impact VARCHAR(255),
+    is_featured BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_case_studies (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(512) NOT NULL,
+    slug VARCHAR(512) UNIQUE NOT NULL,
+    client_name VARCHAR(255),
+    industry VARCHAR(255),
+    metric VARCHAR(255),
+    metric_label VARCHAR(255),
+    content LONGTEXT NOT NULL,
+    image_url TEXT,
+    is_featured BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_about_sections (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    section_type ENUM('TIMELINE', 'TEAM', 'HERO', 'VALUE', 'GENERAL') NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    subtitle VARCHAR(255),
+    content TEXT,
+    image_url TEXT,
+    icon_name VARCHAR(255),
+    order_index INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_jobs (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    department VARCHAR(255),
+    location VARCHAR(255),
+    type VARCHAR(50),
+    description TEXT,
+    requirements TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    order_index INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_careers_perks (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    icon_name VARCHAR(255),
+    order_index INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_press_releases (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(512) NOT NULL,
+    source VARCHAR(255),
+    link TEXT,
+    excerpt TEXT,
+    published_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_inquiries (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    subject VARCHAR(255),
+    message TEXT NOT NULL,
+    status ENUM('pending', 'read', 'archived') DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_status (status)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS website_config (
+    config_key VARCHAR(255) PRIMARY KEY,
+    config_value LONGTEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
   `CREATE TABLE IF NOT EXISTS roles (
     id VARCHAR(50) PRIMARY KEY,
@@ -96,6 +194,49 @@ export const REGISTRY_SCHEMA_SQL = [
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_tenant (tenant_id),
     INDEX idx_event (event_type)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_kb_categories (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    type ENUM('HELP', 'API', 'SECURITY') NOT NULL,
+    icon_name VARCHAR(255),
+    order_index INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY (slug, type)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_kb_articles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    category_id INT,
+    title VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    content LONGTEXT NOT NULL,
+    excerpt TEXT,
+    kb_type ENUM('HELP', 'API', 'SECURITY') NOT NULL,
+    icon_name VARCHAR(255),
+    order_index INT DEFAULT 0,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (category_id) REFERENCES platform_kb_categories(id) ON DELETE SET NULL,
+    UNIQUE KEY (slug, kb_type)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_status_components (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    status ENUM('OPERATIONAL', 'DEGRADED', 'PARTIAL_OUTAGE', 'MAJOR_OUTAGE') DEFAULT 'OPERATIONAL',
+    order_index INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS platform_status_incidents (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    status ENUM('INVESTIGATING', 'IDENTIFIED', 'MONITORING', 'RESOLVED') DEFAULT 'INVESTIGATING',
+    impact ENUM('NONE', 'MINOR', 'MAJOR', 'CRITICAL') DEFAULT 'NONE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 

@@ -1,9 +1,11 @@
-import React, { useState, useLayoutEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
+import { motion, AnimatePresence, useScroll, useSpring } from 'motion/react';
 import Marquee from 'react-fast-marquee';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useAuth } from '../AuthContext';
+import TredPosSEO from '../components/common/TredPosSEO';
 import {
   ShoppingCart,
   Package,
@@ -29,7 +31,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@apollo/client';
 import { GET_BILLING_PLANS } from '../gql/registry';
-import { GET_HERO_SECTION, GET_WEBSITE_PRICING } from '../gql/website';
+import { GET_HERO_SECTION, GET_WEBSITE_PRICING, GET_FEATURES } from '../gql/website';
 import { cn } from '../lib/utils';
 
 // Register GSAP plugins
@@ -41,7 +43,13 @@ export default function LandingPage() {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeCategory, setActiveCategory] = useState('All');
   const { openAuth } = useAuth();
-  
+  const { scrollYProgress } = useScroll();
+  const scaleX = useSpring(scrollYProgress, {
+    stiffness: 100,
+    damping: 30,
+    restDelta: 0.001
+  });
+
   // Safe unwrap for CommonJS/ESM interop
   const MarqueeComponent = (Marquee as any).default || Marquee;
 
@@ -80,7 +88,10 @@ export default function LandingPage() {
 
   const { data: pricingData } = useQuery(GET_WEBSITE_PRICING);
   const websitePricing = pricingData?.getWebsitePricing;
-  
+
+  const { data: featureData } = useQuery(GET_FEATURES);
+  const registryFeatures = featureData?.getFeatures || [];
+
   const displayFee = websitePricing?.basePrice || "20K";
   const onboardedCount = websitePricing?.onboardedCount || 10;
 
@@ -93,7 +104,7 @@ export default function LandingPage() {
     const colors = ['#F97316', '#3B82F6', '#10B981', '#8B5CF6', '#EF4444', '#EC4899', '#06B6D4'];
     let hash = 0;
     for (let i = 0; i < name.length; i++) {
-       hash = name.charCodeAt(i) + ((hash << 5) - hash);
+      hash = name.charCodeAt(i) + ((hash << 5) - hash);
     }
     return colors[rev(Math.abs(hash)) % colors.length];
   };
@@ -225,7 +236,12 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="tred-web" ref={containerRef}>
+    <div className="relative min-h-screen bg-cream overflow-hidden" ref={containerRef}>
+      <TredPosSEO />
+      <motion.div
+        className="fixed top-0 left-0 w-full h-[2px] bg-neo-orange z-[100] origin-left"
+        style={{ scaleX }}
+      />
       <div className="min-h-screen bg-white text-black font-sans selection:bg-neo-orange selection:text-white">
         {/* Hero Section */}
         <section className="hero-section relative pt-24 lg:pt-[120px] pb-10 md:pb-20 bg-cream border-b-4 border-black overflow-hidden font-display text-balance">
@@ -353,22 +369,34 @@ export default function LandingPage() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
-              {[
-                { title: "Lightning Fast Checkout", desc: "Process transactions in milliseconds with our optimized engine.", icon: Zap, color: "bg-neo-orange" },
-                { title: "Smart Inventory", desc: "Real-time tracking across all your locations and warehouses.", icon: Package, color: "bg-neo-blue" },
-                { title: "Deep Analytics", desc: "Understand your business with beautiful, actionable reports.", icon: BarChart3, color: "bg-neo-green" },
-                { title: "Global Payments", desc: "Accept any payment method, from anywhere in the world.", icon: CreditCard, color: "bg-yellow-400" },
-                { title: "Team Management", desc: "Role-based access and performance tracking for your staff.", icon: Users, color: "bg-purple-400" },
-                { title: "Forensic Auditing", desc: "Keep trading and track everything with forensic-level accuracy.", icon: ShieldCheck, color: "bg-pink-400" },
-              ].map((feature, i) => (
-                <div key={i} className="feature-card neo-card p-6 sm:p-10 group hover:-translate-y-2 transition-transform shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1">
-                  <div className={cn("w-14 h-14 sm:w-16 sm:h-16 neo-border flex items-center justify-center mb-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", feature.color)}>
-                    <feature.icon className="size-7 sm:size-8" />
+              {registryFeatures.length > 0 ? (
+                registryFeatures.map((feature: any, i: number) => (
+                  <div key={i} className="feature-card neo-card p-6 sm:p-10 group hover:-translate-y-2 transition-transform shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1">
+                    <div className={cn("w-14 h-14 sm:w-16 sm:h-16 neo-border flex items-center justify-center mb-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", feature.color || 'bg-neo-orange')}>
+                      <Zap className="size-7 sm:size-8" />
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black mb-4 font-display uppercase italic">{feature.title}</h3>
+                    <p className="font-bold text-black/60 text-sm sm:text-base leading-relaxed">{feature.description}</p>
                   </div>
-                  <h3 className="text-xl sm:text-2xl font-black mb-4 font-display uppercase italic">{feature.title}</h3>
-                  <p className="font-bold text-black/60 text-sm sm:text-base leading-relaxed">{feature.desc}</p>
-                </div>
-              ))}
+                ))
+              ) : (
+                [
+                  { title: "Lightning Fast Checkout", desc: "Process transactions in milliseconds with our optimized engine.", icon: Zap, color: "bg-neo-orange" },
+                  { title: "Smart Inventory", desc: "Real-time tracking across all your locations and warehouses.", icon: Package, color: "bg-neo-blue" },
+                  { title: "Deep Analytics", desc: "Understand your business with beautiful, actionable reports.", icon: BarChart3, color: "bg-neo-green" },
+                  { title: "Global Payments", desc: "Accept any payment method, from anywhere in the world.", icon: CreditCard, color: "bg-yellow-400" },
+                  { title: "Team Management", desc: "Role-based access and performance tracking for your staff.", icon: Users, color: "bg-purple-400" },
+                  { title: "Forensic Auditing", desc: "Keep trading and track everything with forensic-level accuracy.", icon: ShieldCheck, color: "bg-pink-400" },
+                ].map((feature, i) => (
+                  <div key={i} className="feature-card neo-card p-6 sm:p-10 group hover:-translate-y-2 transition-transform shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1">
+                    <div className={cn("w-14 h-14 sm:w-16 sm:h-16 neo-border flex items-center justify-center mb-6 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", feature.color)}>
+                      <feature.icon className="size-7 sm:size-8" />
+                    </div>
+                    <h3 className="text-xl sm:text-2xl font-black mb-4 font-display uppercase italic">{feature.title}</h3>
+                    <p className="font-bold text-black/60 text-sm sm:text-base leading-relaxed">{feature.desc}</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </section>
@@ -438,11 +466,11 @@ export default function LandingPage() {
                       <span className="text-xs sm:text-sm font-black uppercase tracking-widest italic">{websitePricing?.subLabel || "Full Access Tier"}</span>
                     </div>
                     <h3 className="text-3xl sm:text-4xl font-black mb-8 font-display uppercase tracking-tighter opacity-90 italic leading-none">{websitePricing?.planName || 'TREDPOS POWER'}</h3>
-                    
+
                     <div className="relative mb-8 md:mb-12 group/price inline-block">
                       {/* Kinetic Mesh Glow */}
                       <div className="absolute inset-0 bg-white/20 blur-[40px] rounded-full scale-110 sm:scale-150 animate-pulse" />
-                      
+
                       <div className="relative flex items-center gap-3 sm:gap-4">
                         <span className="text-6xl sm:text-7xl md:text-8xl lg:text-9xl font-black font-display text-white tracking-tighter drop-shadow-[0_20px_50px_rgba(255,255,255,0.2)] italic">
                           {priceValue}
@@ -485,26 +513,26 @@ export default function LandingPage() {
                     <div className="mt-8 sm:mt-10 pt-6 border-t border-white/10">
                       <p className="text-[10px] font-black uppercase tracking-widest text-white/40 mb-4 italic">Institutional Momentum:</p>
                       <div className="flex items-center gap-4">
-                         <div className="flex -space-x-3">
-                            {(websitePricing?.onboardedTenants || []).slice(0, 5).map((name: string, i: number) => (
-                               <div 
-                                  key={i}
-                                  className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-neo-blue flex items-center justify-center text-white text-[8px] sm:text-[10px] font-black shadow-lg"
-                                  style={{ backgroundColor: getInstitutionalColor(name) }}
-                                  title={name}
-                               >
-                                  {name.charAt(0).toUpperCase()}
-                               </div>
-                            ))}
-                            {(websitePricing?.onboardedCount || 0) > 5 && (
-                               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-neo-blue bg-black text-white flex items-center justify-center text-[8px] font-black">
-                                  +{onboardedCount - 5}
-                               </div>
-                            )}
-                         </div>
-                         <p className="text-[10px] font-bold text-white/60 uppercase tracking-tighter leading-none italic">
-                            Currently Scaling <br /> Business Nodes
-                         </p>
+                        <div className="flex -space-x-3">
+                          {(websitePricing?.onboardedTenants || []).slice(0, 5).map((name: string, i: number) => (
+                            <div
+                              key={i}
+                              className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-neo-blue flex items-center justify-center text-white text-[8px] sm:text-[10px] font-black shadow-lg"
+                              style={{ backgroundColor: getInstitutionalColor(name) }}
+                              title={name}
+                            >
+                              {name.charAt(0).toUpperCase()}
+                            </div>
+                          ))}
+                          {(websitePricing?.onboardedCount || 0) > 5 && (
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full border-2 border-neo-blue bg-black text-white flex items-center justify-center text-[8px] font-black">
+                              +{onboardedCount - 5}
+                            </div>
+                          )}
+                        </div>
+                        <p className="text-[10px] font-bold text-white/60 uppercase tracking-tighter leading-none italic">
+                          Currently Scaling <br /> Business Nodes
+                        </p>
                       </div>
                     </div>
                   </div>

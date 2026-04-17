@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { useQuery } from '@apollo/client';
+import { useNavigate } from 'react-router-dom';
+import { GET_BLOG_POSTS } from '../gql/website';
 import { 
   Zap, 
   Clock, 
@@ -15,54 +18,26 @@ import {
   Filter
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import LogoLoader from '../components/LogoLoader';
 
 export default function BlogPage() {
+  const navigate = useNavigate();
+  const { data, loading } = useQuery(GET_BLOG_POSTS);
   const [activeCategory, setActiveCategory] = useState('All');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const categories = ["All", "Architecture", "Engineering", "Strategy", "Security", "Institutional"];
 
-  const posts = [
-    {
-      title: "The Forensic Ledger: Engineering Absolute Reliability",
-      category: "Architecture",
-      author: "Julian Thorne",
-      date: "Mar 28, 2026",
-      excerpt: "How we implemented multi-layer distributed ledgers to ensure zero-latency forensic auditing in high-frequency trading environments.",
-      image: "https://picsum.photos/seed/ledger/800/600",
-      color: "bg-neo-blue"
-    },
-    {
-      title: "Synchronizing Global Inventory under Distributed Load",
-      category: "Engineering",
-      author: "Marcus Chen",
-      date: "Mar 22, 2026",
-      excerpt: "An deep dive into our proprietary orchestration algorithms for real-time stock synchronization across 50+ international regions.",
-      image: "https://picsum.photos/seed/sync/800/600",
-      color: "bg-neo-orange"
-    },
-    {
-      title: "Predictive Yield: The Next-Gen Strategic Advantage",
-      category: "Strategy",
-      author: "Elena Vance",
-      date: "Mar 15, 2026",
-      excerpt: "Leveraging institutional AI to forecast market trends and automate procurement cycles before the demand curve shifts.",
-      image: "https://picsum.photos/seed/yield/800/600",
-      color: "bg-neo-green"
-    },
-    {
-      title: "Hardening the Vanguard: Our Security Manifesto",
-      category: "Security",
-      author: "Cyber Team",
-      date: "Mar 10, 2026",
-      excerpt: "Why TredPOS follows a zero-trust architecture and how we protect enterprise data from multi-vector institutional threats.",
-      image: "https://picsum.photos/seed/security/800/600",
-      color: "bg-yellow-400"
-    }
-  ];
+  const posts = data?.getBlogPosts || [];
 
-  const filteredPosts = activeCategory === 'All' 
-    ? posts 
-    : posts.filter(p => p.category === activeCategory);
+  const filteredPosts = posts.filter((post: any) => {
+    const matchesCategory = activeCategory === 'All' || post.category === activeCategory;
+    const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                         post.excerpt?.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
+  if (loading) return <LogoLoader status="SYNCHRONIZING_MANIFESTO" />;
 
   return (
      <div className="pt-20 overflow-hidden">
@@ -110,7 +85,13 @@ export default function BlogPage() {
             </div>
             <div className="flex items-center gap-4 p-3 bg-cream neo-border w-full md:w-auto shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all">
               <Search size={20} className="opacity-40" />
-              <input type="text" placeholder="Search Manifesto..." className="bg-transparent font-bold outline-none flex-1 md:w-64" />
+              <input 
+                type="text" 
+                placeholder="Search Manifesto..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent font-bold outline-none flex-1 md:w-64" 
+              />
             </div>
           </div>
         </div>
@@ -121,26 +102,31 @@ export default function BlogPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-2 gap-x-12 gap-y-20">
             <AnimatePresence mode="popLayout">
-              {filteredPosts.map((post, i) => (
+              {filteredPosts.map((post: any, i: number) => (
                 <motion.article
                   layout
-                  key={post.title}
+                  key={post.id}
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.95 }}
                   transition={{ delay: i * 0.1 }}
                   className="group cursor-pointer"
+                  onClick={() => navigate(`/blog/${post.slug}`)}
                 >
                   <div className="relative mb-10 neo-border overflow-hidden rotate-[-1deg] group-hover:rotate-0 transition-transform shadow-[12px_12px_0px_0px_rgba(255,107,0,1)] hover:shadow-none hover:translate-x-3 hover:translate-y-3 transition-all duration-300">
-                    <img src={post.image} alt={post.title} className="w-full aspect-video object-cover grayscale group-hover:grayscale-0 transition-all duration-700" />
-                    <div className={cn("absolute top-6 left-6 px-4 py-1 neo-border text-[10px] font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]", post.color)}>
-                      {post.category}
+                    <img 
+                      src={post.image_url || `https://picsum.photos/seed/${post.id}/800/600`} 
+                      alt={post.title} 
+                      className="w-full aspect-video object-cover grayscale group-hover:grayscale-0 transition-all duration-700" 
+                    />
+                    <div className={cn("absolute top-6 left-6 px-4 py-1 neo-border text-[10px] font-black uppercase tracking-widest text-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-neo-orange")}>
+                      {post.category || 'VANGUARD'}
                     </div>
                   </div>
 
                   <div className="space-y-6">
                     <div className="flex items-center gap-6 text-xs font-black uppercase tracking-widest opacity-40">
-                      <span className="flex items-center gap-2 italic"><Clock size={14} /> {post.date}</span>
+                      <span className="flex items-center gap-2 italic"><Clock size={14} /> {new Date(post.created_at).toLocaleDateString()}</span>
                       <span className="flex items-center gap-2 italic"><User size={14} /> {post.author}</span>
                     </div>
                     <h2 className="text-2xl sm:text-4xl font-black font-display uppercase tracking-tighter leading-none italic group-hover:text-neo-orange transition-colors">{post.title}</h2>
@@ -152,12 +138,11 @@ export default function BlogPage() {
                 </motion.article>
               ))}
             </AnimatePresence>
-          </div>
-
-          <div className="mt-32 text-center">
-            <button className="neo-button bg-black text-white text-xl py-6 px-16 italic hover:bg-neo-blue transition-colors">
-              Load More Deep Dives
-            </button>
+            {filteredPosts.length === 0 && (
+              <div className="col-span-2 py-20 text-center neo-border bg-cream">
+                <p className="text-2xl font-black uppercase italic opacity-40">Zero_Signal_Detected</p>
+              </div>
+            )}
           </div>
         </div>
       </section>

@@ -12,9 +12,23 @@ import {
   ExternalLink
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useQuery } from '@apollo/client';
+import { GET_CASE_STUDIES } from '../gql/website';
 
 export default function CaseStudiesPage() {
-  const cases = [
+  const { data: caseRes } = useQuery(GET_CASE_STUDIES);
+  const registryCases = caseRes?.getCaseStudies || [];
+
+  const cases = registryCases.length > 0 ? registryCases.map((cs: any, i: number) => ({
+    title: cs.title,
+    industry: cs.industry,
+    impact: cs.results || 'Institutional Success',
+    desc: cs.summary || cs.content.substring(0, 150) + '...',
+    metric: cs.metric || '0',
+    metricLabel: cs.metric_label || 'Data Node',
+    image: cs.image_url || `https://picsum.photos/seed/case${i}/800/600`,
+    color: i % 3 === 0 ? "bg-neo-blue" : i % 3 === 1 ? "bg-neo-orange" : "bg-neo-green"
+  })) : [
     {
       title: "Global Retail Corp",
       industry: "Enterprise Commerce",

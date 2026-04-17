@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import TredPosSEO from '../components/common/TredPosSEO';
 import {
    CheckCircle2,
    Cpu,
@@ -66,6 +67,10 @@ export default function PricingDetail() {
 
    return (
       <div className="bg-[#fcfcfc] text-[#1a1a1a] min-h-screen font-sans selection:bg-brand-accent selection:text-white pt-24 md:pt-32 pb-16 md:pb-24 px-4 sm:px-6 md:px-8 overflow-hidden">
+         <TredPosSEO 
+            title="Institutional Pricing & Licensing" 
+            description="Transparent, fixed-rate pricing for the TredPos ecosystem. One flat rate for unlimited nodes, forensic ledgering, and global inventory sync."
+         />
          <div className="max-w-7xl mx-auto space-y-12 sm:space-y-20">
 
             {/* Header Section */}

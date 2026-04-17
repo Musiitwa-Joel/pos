@@ -32,7 +32,9 @@ import SettingsView from './website/SettingsView';
 
 // Sub-modules from the user's admin sub-directory
 import ContentManager from '../../web/admin/ContentManager';
-import Inquiries from '../../web/admin/Inquiries';
+import ContactAdmin from '../../web/admin/ContactAdmin';
+import HelpCenterAdmin from '../../web/admin/HelpCenterAdmin';
+import StatusAdmin from '../../web/admin/StatusAdmin';
 import Settings from '../../web/admin/Settings';
 
 interface NavRowProps {
@@ -106,13 +108,16 @@ export default function WebsiteManager() {
     { id: 'features', title: 'Features Grid', icon: FileText, category: 'CONTENT', color: 'bg-neo-green', description: 'AUDIT AND REFINE CORE PLATFORM COMPETENCIES ACROSS THE SERVICE MATRIX.' },
     { id: 'cases', title: 'Case Studies', icon: Star, category: 'CONTENT', color: 'bg-neo-blue', description: 'TRACK INSTITUTIONAL SUCCESS PROTOCOLS AND PUBLIC-FACING IMPLEMENTATION LOGS.' },
     { id: 'reviews', title: 'Reviews', icon: MessageSquare, category: 'CONTENT', color: 'bg-purple-500', description: 'MONITOR PUBLIC TESTIMONIAL FEEDBACK AND CLIENT SATISFACTION TELEMETRY.' },
-    { id: 'updates', title: 'Updates / Changelog', icon: Zap, category: 'CONTENT', color: 'bg-yellow-500', description: 'DEPLOY SYSTEM REVISIONS, PLATFORM PATCHES, AND NEW ARCHITECTURAL LOGS.' },
+    { id: 'blog', title: 'Blog Publications', icon: FileText, category: 'CONTENT', color: 'bg-indigo-600', description: 'OVERSEE ARCHITECTURAL INSIGHTS, INDUSTRY BRIEFS, AND GLOBAL IDENTITY LOGS.' },
+    { id: 'changelog', title: 'Updates / Changelog', icon: Zap, category: 'CONTENT', color: 'bg-yellow-500', description: 'DEPLOY SYSTEM REVISIONS, PLATFORM PATCHES, AND NEW ARCHITECTURAL LOGS.' },
     { id: 'about', title: 'About Page', icon: Globe, category: 'CONTENT', color: 'bg-teal-500', description: 'CONFIGURE REGISTRY ORIGIN LOGS, MISSION PROTOCOLS, AND CORPORATE HISTORY.' },
     { id: 'careers', title: 'Careers', icon: Briefcase, category: 'CONTENT', color: 'bg-indigo-500', description: 'MANAGE STAFFING FOOTPRINT, INSTITUTIONAL VACANCIES, AND RECRUITMENT NODES.' },
     { id: 'press', title: 'Press Kit', icon: Type, category: 'CONTENT', color: 'bg-rose-500', description: 'PUBLIC RELATIONS ARTIFACTS, BRAND ASSETS, AND COMMUNICATION RELEASES.' },
     { id: 'pricing', title: 'Pricing Plans', icon: Star, category: 'CONTENT', color: 'bg-neo-orange', description: 'CALIBRATE SUBSCRIPTION TIERS, BILLING ARTIFACTS, AND CONSUMPTION LOGIC.' },
     { id: 'footer', title: 'Footer Content', icon: ImageIcon, category: 'CONTENT', color: 'bg-slate-500', description: 'MANAGE INFRASTRUCTURE LINKS, COMPLIANCE FOOTERS, AND SECONDARY NAVIGATION.' },
+    { id: 'help-center', title: 'Help Center', icon: MessageSquare, category: 'CONTENT', color: 'bg-neo-blue', description: 'MANAGE INSTITUTIONAL KNOWLEDGE NODES, API BLUEPRINTS, AND SECURITY REGISTRIES.' },
     { id: 'contact', title: 'Website Inquiries', icon: Mail, category: 'UTILITY', color: 'bg-emerald-500', description: 'PROCESS REGISTRY CONTACT REQUESTS AND INBOUND TELEMETRY TICKETS.' },
+    { id: 'status-hub', title: 'Status & Pulse', icon: Activity, category: 'SECURITY', color: 'bg-neo-orange', description: 'MONITOR CORE CLUSTER HEALTH, BROADCAST INCIDENTS, AND CALIBRATE NODE PULSES.' },
     { id: 'settings', title: 'Global Settings', icon: SettingsIcon, category: 'SECURITY', color: 'bg-neo-blue', description: 'SYSTEM-WIDE CONFIGURATION AND CORE PLATFORM INTEGRITY LOCKS.' },
   ];
 
@@ -120,7 +125,54 @@ export default function WebsiteManager() {
 
   const renderModuleContent = () => {
     switch (activeView) {
-      case 'contact': return <Inquiries />;
+      case 'contact': return (
+        <div className="flex flex-col h-full bg-[var(--bg-main)]">
+          <div className="flex items-center gap-4 p-8 border-b border-[var(--border-main)]">
+            <button onClick={handleBack} className="neo-button p-3 bg-white hover:bg-black hover:text-white transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-3xl font-black font-display uppercase tracking-widest text-[var(--text-main)]">Global Transmissions</h2>
+              <p className="text-sm font-mono text-[var(--text-muted)] opacity-60">HQ // Contact Inquiry Pipeline</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-12">
+            <ContactAdmin />
+          </div>
+        </div>
+      );
+      case 'help-center': return (
+        <div className="flex flex-col h-full bg-[var(--bg-main)]">
+          <div className="flex items-center gap-4 p-8 border-b border-[var(--border-main)]">
+            <button onClick={handleBack} className="neo-button p-3 bg-white hover:bg-black hover:text-white transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-3xl font-black font-display uppercase tracking-widest text-[var(--text-main)]">Help Center Registry</h2>
+              <p className="text-sm font-mono text-[var(--text-muted)] opacity-60">HQ // Global Knowledge Node Management</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-12">
+            <HelpCenterAdmin />
+          </div>
+        </div>
+      );
+      case 'status-hub': return (
+        <div className="flex flex-col h-full bg-[var(--bg-main)]">
+          <div className="flex items-center gap-4 p-8 border-b border-[var(--border-main)]">
+            <button onClick={handleBack} className="neo-button p-3 bg-white hover:bg-black hover:text-white transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <div>
+              <h2 className="text-3xl font-black font-display uppercase tracking-widest text-[var(--text-main)]">System Pulse Registry</h2>
+              <p className="text-sm font-mono text-[var(--text-muted)] opacity-60">HQ // Global Cluster Health & Incident Command</p>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto p-12">
+            <StatusAdmin />
+          </div>
+        </div>
+      );
       case 'settings': return <Settings />;
       default: return <ContentManager initialSection={activeView} onBack={handleBack} />;
     }

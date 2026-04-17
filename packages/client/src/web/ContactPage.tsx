@@ -1,19 +1,21 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  Mail, 
-  Phone, 
-  MapPin, 
-  Globe, 
-  MessageSquare, 
-  Send, 
-  Headphones, 
-  ShieldCheck, 
+import {
+  Mail,
+  Phone,
+  MapPin,
+  Globe,
+  MessageSquare,
+  Send,
+  Headphones,
+  ShieldCheck,
   Clock,
   ArrowRight,
   ChevronRight
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useQuery, useMutation } from '@apollo/client';
+import { SUBMIT_CONTACT_INQUIRY, GET_CONTACT_CONFIG } from '../gql/website';
 
 export default function ContactPage() {
   const [formData, setFormData] = useState({
@@ -23,11 +25,41 @@ export default function ContactPage() {
     message: ''
   });
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const { data: configData } = useQuery(GET_CONTACT_CONFIG);
+  const supportEmail = configData?.getContactConfig?.support_email || 'ops@tredpos.com';
+  const supportPhone = configData?.getContactConfig?.support_phone || '+44 (0) 20 7946 0123';
+
+  const [submitInquiry] = useMutation(SUBMIT_CONTACT_INQUIRY);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 5000);
+    setIsSubmitting(true);
+    try {
+      await submitInquiry({
+        variables: {
+          input: {
+            name: formData.name,
+            email: formData.email,
+            subject: formData.subject,
+            message: formData.message
+          }
+        }
+      });
+      setSubmitted(true);
+      setFormData({
+        name: '',
+        email: '',
+        subject: 'General Inquiry',
+        message: ''
+      });
+      setTimeout(() => setSubmitted(false), 5000);
+    } catch (err) {
+      console.error("Transmission failed:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const offices = [
@@ -37,7 +69,7 @@ export default function ContactPage() {
   ];
 
   return (
-     <div className="pt-20 overflow-hidden">
+    <div className="pt-20 overflow-hidden">
       {/* Hero Section */}
       <section className="relative py-20 sm:py-32 bg-neo-blue text-white border-b-4 border-black overflow-hidden px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto relative z-10">
@@ -46,7 +78,7 @@ export default function ContactPage() {
             animate={{ x: 0, opacity: 1 }}
           >
             <div className="inline-block px-4 py-1 bg-neo-orange neo-border mb-8 rotate-[-2deg]">
-              <span className="text-xs font-black uppercase tracking-widest text-white">Contact the Vanguards</span>
+              <span className="text-xs font-black uppercase tracking-widest text-white">Contact TredPos</span>
             </div>
             <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] font-black leading-none mb-8 font-display uppercase tracking-tighter">
               ESTABLISH <br />
@@ -75,7 +107,7 @@ export default function ContactPage() {
                     </div>
                     <div>
                       <h4 className="text-xl font-black font-display uppercase">Email Operations</h4>
-                      <p className="text-black/60 font-bold">ops@tredpos.com</p>
+                      <p className="text-black/60 font-bold">{supportEmail}</p>
                     </div>
                   </div>
 
@@ -84,8 +116,8 @@ export default function ContactPage() {
                       <Phone size={24} />
                     </div>
                     <div>
-                      <h4 className="text-xl font-black font-display uppercase">Vanguard Hotline</h4>
-                      <p className="text-black/60 font-bold">+44 (0) 20 7946 0123</p>
+                      <h4 className="text-xl font-black font-display uppercase">TredPos Hotline</h4>
+                      <p className="text-black/60 font-bold">{supportPhone}</p>
                     </div>
                   </div>
 
@@ -101,12 +133,22 @@ export default function ContactPage() {
                 </div>
               </div>
 
-                <div className="p-8 sm:p-10 bg-black text-white neo-border sm:rotate-2">
-                <div className="flex items-center gap-4 mb-6">
-                  <Clock size={32} className="text-neo-orange grow-0 shrink-0" />
-                  <h3 className="text-xl sm:text-2xl font-black font-display uppercase tracking-widest italic">VANGUARD UPTIME</h3>
+              <div className="p-8 sm:p-10 bg-black border-4 border-white/10 sm:rotate-2 shadow-[12px_12px_0px_0px_rgba(255,107,0,0.2)]">
+                <div className="flex items-center gap-5 mb-6">
+                  <div className="w-14 h-14 bg-neo-orange text-black flex items-center justify-center shrink-0 shadow-[4px_4px_0px_0px_white]">
+                    <Clock size={32} strokeWidth={3} />
+                  </div>
+                  <h3 
+                    className="text-2xl sm:text-3xl font-black uppercase tracking-tighter italic"
+                    style={{ color: '#FFFFFF', visibility: 'visible', opacity: 1 }}
+                  >
+                    TREDPOS UPTIME
+                  </h3>
                 </div>
-                <p className="text-sm sm:text-base font-bold opacity-70 leading-relaxed text-balance">
+                <p 
+                  className="text-base sm:text-lg font-bold leading-relaxed"
+                  style={{ color: 'rgba(255,255,255,0.9)', visibility: 'visible', opacity: 1 }}
+                >
                   Support operations across all regions are synchronized. Our global command centers respond within 15 minutes for Tier 1 incidents.
                 </p>
               </div>
@@ -114,7 +156,7 @@ export default function ContactPage() {
 
             {/* Right Column: Contact Form */}
             <div className="lg:col-span-7">
-               <motion.div
+              <motion.div
                 initial={{ y: 50, opacity: 0 }}
                 whileInView={{ y: 0, opacity: 1 }}
                 viewport={{ once: true }}
@@ -128,7 +170,7 @@ export default function ContactPage() {
                 <form onSubmit={handleSubmit} className="space-y-8">
                   <div className="grid md:grid-cols-2 gap-8">
                     <div className="space-y-3">
-                      <label className="text-xs font-black uppercase tracking-widest ml-1">Vanguard Identity</label>
+                      <label className="text-xs font-black uppercase tracking-widest ml-1">TredPos Identity</label>
                       <input
                         required
                         type="text"
@@ -179,10 +221,11 @@ export default function ContactPage() {
 
                   <button
                     type="submit"
-                    className="w-full neo-button bg-black text-white text-xl py-6 flex items-center justify-center gap-4 group"
+                    disabled={isSubmitting}
+                    className="w-full neo-button bg-black text-white text-xl py-6 flex items-center justify-center gap-4 group disabled:opacity-50"
                   >
-                    <span>Execute Transmission</span>
-                    <Send size={24} className="group-hover:translate-x-2 transition-transform" />
+                    <span>{isSubmitting ? 'Transmitting...' : 'Execute Transmission'}</span>
+                    {!isSubmitting && <Send size={24} className="group-hover:translate-x-2 transition-transform" />}
                   </button>
                 </form>
 
@@ -210,13 +253,13 @@ export default function ContactPage() {
         </div>
       </section>
 
-       {/* Global Offices */}
+      {/* Global Offices */}
       <section className="py-20 sm:py-32 bg-cream border-b-4 border-black">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-4xl sm:text-6xl md:text-8xl font-black font-display uppercase tracking-tighter mb-12 sm:mb-20">GLOBAL <br /> <span className="text-neo-green">COMMAND</span> CENTERS</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-12">
             {offices.map((office, i) => (
-               <motion.div
+              <motion.div
                 key={office.city}
                 initial={{ y: 20, opacity: 0 }}
                 whileInView={{ y: 0, opacity: 1 }}

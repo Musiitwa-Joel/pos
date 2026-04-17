@@ -1,4 +1,6 @@
 import React from 'react';
+import { useQuery } from '@apollo/client';
+import { GET_CONTACT_INQUIRIES } from '../../gql/website';
 import { 
   TrendingUp, 
   Users, 
@@ -8,23 +10,23 @@ import {
   ArrowDownRight,
   Zap,
   Globe,
-  Star,
+  Radio,
   ChevronRight
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 export default function Dashboard() {
+  const { data: contactData } = useQuery(GET_CONTACT_INQUIRIES);
+  
+  const inquiries = contactData?.getContactInquiries || [];
+  const pendingCount = inquiries.filter((i: any) => i.status === 'pending').length;
+  const recentInquiries = inquiries.slice(0, 3);
+  
   const stats = [
     { label: 'Total Visitors', value: '12,482', trend: '+12.5%', icon: Eye, color: 'bg-neo-blue' },
     { label: 'Active Users', value: '1,284', trend: '+5.2%', icon: Users, color: 'bg-neo-orange' },
-    { label: 'New Inquiries', value: '42', trend: '-2.1%', icon: MessageSquare, color: 'bg-neo-green' },
-    { label: 'Conversion Rate', value: '3.8%', trend: '+0.8%', icon: TrendingUp, color: 'bg-yellow-400' },
-  ];
-
-  const recentInquiries = [
-    { id: 1, name: 'John Doe', email: 'john@example.com', message: 'Interested in the Pro plan...', time: '2h ago' },
-    { id: 2, name: 'Sarah Smith', email: 'sarah@retail.co', message: 'Do you support multi-warehouse?', time: '5h ago' },
-    { id: 3, name: 'Mike Johnson', email: 'mike@tech.io', message: 'API documentation link?', time: '1d ago' },
+    { label: 'Unread Signals', value: pendingCount.toString(), trend: 'LIVE', icon: Radio, color: 'bg-black text-white' },
+    { label: 'Total Inquiries', value: inquiries.length.toString(), trend: '+100%', icon: MessageSquare, color: 'bg-neo-green' },
   ];
 
   return (
@@ -60,10 +62,9 @@ export default function Dashboard() {
             <div className="flex items-end justify-between">
               <h3 className="text-4xl font-black font-display tracking-tighter">{stat.value}</h3>
               <div className={cn(
-                "flex items-center gap-1 font-black text-xs px-2 py-1 neo-border",
-                stat.trend.startsWith('+') ? "bg-neo-green/20 text-neo-green" : "bg-red-100 text-red-600"
+                "flex items-center gap-1 font-black text-xs px-2 py-1 neo-border bg-white text-black",
               )}>
-                {stat.trend.startsWith('+') ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
+                {stat.trend === 'LIVE' ? <Radio size={14} className="text-neo-orange animate-pulse" /> : null}
                 {stat.trend}
               </div>
             </div>
@@ -82,21 +83,27 @@ export default function Dashboard() {
               </button>
             </div>
             <div className="space-y-6">
-              {recentInquiries.map((inquiry) => (
-                <div key={inquiry.id} className="p-6 neo-border bg-white hover:bg-cream transition-colors group">
-                  <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h4 className="text-xl font-black font-display uppercase tracking-tighter">{inquiry.name}</h4>
-                      <p className="text-sm font-bold text-black/40">{inquiry.email}</p>
-                    </div>
-                    <span className="text-xs font-black uppercase tracking-widest text-black/40">{inquiry.time}</span>
-                  </div>
-                  <p className="font-bold text-black/60 mb-6 line-clamp-2">"{inquiry.message}"</p>
-                  <button className="neo-button bg-black text-white text-xs py-2 px-4">
-                    Reply Now
-                  </button>
+              {recentInquiries.length === 0 ? (
+                <div className="p-12 neo-border flex flex-col items-center justify-center text-center opacity-50 bg-cream border-dashed">
+                  <Radio size={48} className="mb-4" />
+                  <span className="font-black uppercase tracking-widest text-xs">NO_INCOMING_TRANSMISSIONS</span>
                 </div>
-              ))}
+              ) : (
+                recentInquiries.map((inquiry: any) => (
+                  <div key={inquiry.id} className="p-6 pos-border bg-white hover:bg-cream transition-colors group relative">
+                    {inquiry.status === 'pending' && (
+                      <div className="absolute top-4 right-4 w-3 h-3 bg-neo-orange border-2 border-black rounded-full animate-pulse" />
+                    )}
+                    <div className="flex justify-between items-start mb-4 pr-6">
+                      <div>
+                        <h4 className="text-xl font-black font-display uppercase tracking-tighter line-clamp-1">{inquiry.subject || 'GENERAL_INQUIRY'}</h4>
+                        <p className="text-sm font-bold text-black/60">{inquiry.name} <span className="opacity-50">({inquiry.email})</span></p>
+                      </div>
+                    </div>
+                    <p className="font-bold text-black/80 mb-6 line-clamp-2 bg-cream p-4 border border-black/10 font-mono text-xs">"{inquiry.message}"</p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

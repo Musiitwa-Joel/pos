@@ -1,21 +1,35 @@
 import React from 'react';
-import { motion } from 'motion/react';
-import { 
-  Star, 
-  Quote, 
-  ShieldCheck, 
-  Zap, 
-  Users, 
-  Globe, 
+import { motion, AnimatePresence } from 'motion/react';
+import TredPosSEO from '../components/common/TredPosSEO';
+import {
+  Star,
+  Quote,
+  ShieldCheck,
+  Zap,
+  Users,
+  Globe,
   CheckCircle2,
   ArrowRight,
   TrendingDown,
   LayoutDashboard
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useQuery } from '@apollo/client';
+import Marquee from 'react-fast-marquee';
+import { GET_REVIEWS } from '../gql/website';
 
 export default function ReviewsPage() {
-  const testimonials = [
+  const { data: reviewRes } = useQuery(GET_REVIEWS);
+  const registryReviews = reviewRes?.getReviews || [];
+
+  const testimonials = registryReviews.length > 0 ? registryReviews.map((r: any, i: number) => ({
+    name: r.name,
+    role: r.role + (r.company ? `, ${r.company}` : ''),
+    quote: r.content,
+    rating: r.rating || 5,
+    impact: r.impact || 'Institutional Success',
+    image: r.avatar_url || `https://picsum.photos/seed/user${i}/100/100`
+  })) : [
     {
       name: "Marcus Thorne",
       role: "CTO, Global Retail Hub",
@@ -26,7 +40,7 @@ export default function ReviewsPage() {
     },
     {
       name: "Elena Vance",
-      role: "Strategy Director, Vanguard Logistics",
+      role: "Strategy Director, TredPos Logistics",
       quote: "The forensic financial reporting module is unprecedented. Every transaction is a traceable node in a highly resilient distributed ledger system.",
       rating: 5,
       impact: "30% Operational Latency Reduction",
@@ -49,8 +63,14 @@ export default function ReviewsPage() {
     { title: "API Response", rating: 99, label: "Core Latency" }
   ];
 
+  const MarqueeComponent = (Marquee as any).default || Marquee;
+
   return (
-     <div className="pt-20 overflow-hidden text-balance">
+    <div className="pt-20 overflow-hidden text-balance">
+      <TredPosSEO 
+        title="Institutional Success Registry" 
+        description="Forensic customer success stories and architectural feedback from global institutions using the TredPos Trading OS."
+      />
       {/* Hero Section */}
       <section className="relative py-16 sm:py-32 bg-neo-blue text-white border-b-4 border-black overflow-hidden px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto relative z-10">
@@ -61,9 +81,9 @@ export default function ReviewsPage() {
             <div className="inline-block px-4 py-1 bg-neo-green text-black neo-border mb-8 rotate-[-1deg]">
               <span className="text-xs font-black uppercase tracking-widest italic">Institutional Trust Registry</span>
             </div>
-             <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] font-black leading-none mb-8 font-display uppercase tracking-tighter italic">
+            <h1 className="text-4xl sm:text-6xl md:text-8xl lg:text-[110px] font-black leading-none mb-8 font-display uppercase tracking-tighter italic">
               VERIFIED <br />
-              <span className="text-white underline decoration-4 sm:decoration-8 underline-offset-4 sm:underline-offset-8 decoration-neo-orange italic">VANGUARDS</span>
+              <span className="text-white underline decoration-4 sm:decoration-8 underline-offset-4 sm:underline-offset-8 decoration-neo-orange italic">BUSINESSES</span>
             </h1>
             <p className="text-2xl font-bold max-w-2xl leading-tight opacity-70">
               The unfiltered truth about the architectural capabilities and institutional yield of the TredPOS Trading OS.
@@ -109,7 +129,7 @@ export default function ReviewsPage() {
                 <div>
                   <Quote size={40} className="text-neo-orange mb-10 opacity-30 group-hover:opacity-100 transition-opacity" />
                   <div className="flex gap-1 mb-8">
-                    {[...Array(5)].map((_, i) => (
+                    {[...Array(t.rating || 5)].map((_, i) => (
                       <Star key={i} size={20} className="fill-neo-orange text-neo-orange" />
                     ))}
                   </div>
@@ -135,7 +155,7 @@ export default function ReviewsPage() {
       </section>
 
       {/* Global Impact Teaser */}
-      <section className="py-20 sm:py-32 bg-white border-y-4 border-black overflow-hidden relative font-display">
+      <section className="py-20 sm:py-32 bg-white border-y-4 border-black overflow-hidden relative font-display text-balance">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div>
@@ -153,15 +173,17 @@ export default function ReviewsPage() {
       </section>
 
       {/* Verified Status Banner */}
-      <div className="bg-neo-green py-6 border-b-4 border-black overflow-hidden">
-        <div className="flex whitespace-nowrap gap-20 animate-marquee items-center">
+      <div className="bg-neo-green py-3 border-b-4 border-black overflow-hidden relative font-display">
+        <MarqueeComponent gradient={false} speed={60} pauseOnHover={true}>
           {[...Array(10)].map((_, i) => (
-            <div key={i} className="flex items-center gap-4">
-              <ShieldCheck className="text-black" size={24} />
-              <span className="text-black text-2xl font-black uppercase font-display italic tracking-widest">VERIFIED INSTITUTIONAL FEEDBACK 2026</span>
+            <div key={i} className="flex items-center gap-4 px-8 py-2">
+              <ShieldCheck className="text-black" size={18} />
+              <span className="text-black text-sm font-black uppercase italic tracking-[0.2em] leading-none">
+                VERIFIED_INSTITUTIONAL_FEEDBACK
+              </span>
             </div>
           ))}
-        </div>
+        </MarqueeComponent>
       </div>
     </div>
   );

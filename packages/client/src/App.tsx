@@ -13,13 +13,18 @@ const AboutPage = React.lazy(() => import('./web/AboutPage'));
 const ContactPage = React.lazy(() => import('./web/ContactPage'));
 const CareersPage = React.lazy(() => import('./web/CareersPage'));
 const BlogPage = React.lazy(() => import('./web/BlogPage'));
+const BlogPostPage = React.lazy(() => import('./web/BlogPostPage'));
 const CaseStudiesPage = React.lazy(() => import('./web/CaseStudiesPage'));
 const ReviewsPage = React.lazy(() => import('./web/ReviewsPage'));
 const KnowledgeBase = React.lazy(() => import('./web/KnowledgeBase'));
 const LegalPage = React.lazy(() => import('./web/LegalPage'));
+const ChangelogPage = React.lazy(() => import('./web/ChangelogPage'));
+const PressPage = React.lazy(() => import('./web/PressPage'));
 import ScrollToTop from './components/ScrollToTop';
 import { Toaster } from 'sonner';
 import LogoLoader from './components/LogoLoader';
+import { HelmetProvider } from 'react-helmet-async';
+import TredPosSEO from './components/common/TredPosSEO';
 
 function MainLayout() {
   return (
@@ -51,9 +56,10 @@ function MainContent() {
           <Route path="/features" element={<ProductFeatures />} />
           <Route path="/about" element={<AboutPage />} />
           <Route path="/contact" element={<ContactPage />} />
-          <Route path="/press" element={<ContactPage />} />
+          <Route path="/press" element={<PressPage />} />
           <Route path="/careers" element={<CareersPage />} />
           <Route path="/blog" element={<BlogPage />} />
+          <Route path="/blog/:slug" element={<BlogPostPage />} />
           <Route path="/updates" element={<BlogPage />} />
           <Route path="/case-studies" element={<CaseStudiesPage />} />
           <Route path="/reviews" element={<ReviewsPage />} />
@@ -64,6 +70,7 @@ function MainContent() {
           <Route path="/privacy" element={<LegalPage type="privacy" />} />
           <Route path="/terms" element={<LegalPage type="terms" />} />
           <Route path="/cookies" element={<LegalPage type="cookies" />} />
+          <Route path="/changelog" element={<ChangelogPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
@@ -81,17 +88,20 @@ export default function App() {
   }, [googleClientId]);
 
   return (
-    <GoogleOAuthProvider clientId={googleClientId}>
-      <HardwareProvider>
-        <POSProvider>
-          <AuthProvider>
-            <BrowserRouter>
-              <Toaster position="bottom-right" theme="dark" richColors />
-              <MainContent />
-            </BrowserRouter>
-          </AuthProvider>
-        </POSProvider>
-      </HardwareProvider>
-    </GoogleOAuthProvider>
+    <HelmetProvider>
+      <TredPosSEO />
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <HardwareProvider>
+          <POSProvider>
+            <AuthProvider>
+              <BrowserRouter>
+                <Toaster position="bottom-right" theme="dark" richColors />
+                <MainContent />
+              </BrowserRouter>
+            </AuthProvider>
+          </POSProvider>
+        </HardwareProvider>
+      </GoogleOAuthProvider>
+    </HelmetProvider>
   );
 }
