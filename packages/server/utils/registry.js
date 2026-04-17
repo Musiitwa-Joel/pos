@@ -237,6 +237,16 @@ export const REGISTRY_SCHEMA_SQL = [
     impact ENUM('NONE', 'MINOR', 'MAJOR', 'CRITICAL') DEFAULT 'NONE',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+  `CREATE TABLE IF NOT EXISTS otp_replay_ledger (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    email VARCHAR(255) NOT NULL,
+    code_hash VARCHAR(255) NOT NULL,
+    is_used BOOLEAN DEFAULT FALSE,
+    expires_at DATETIME NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_email_hash (email, code_hash),
+    INDEX idx_expires (expires_at)
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`
 ];
 
@@ -246,7 +256,14 @@ export const initializeRegistry = async () => {
     for (const sql of REGISTRY_SCHEMA_SQL) {
       await registryPool.query(sql);
     }
-    
+
+    // 🛠️ Atomic Patch: Ensure 'is_used' column exists in otp_replay_ledger
+    const [otpCols] = await registryPool.query("SHOW COLUMNS FROM otp_replay_ledger LIKE 'is_used'");
+    if (otpCols.length === 0) {
+      console.log("[Registry Hub] Patching 'otp_replay_ledger': Adding is_used flag...");
+      await registryPool.query("ALTER TABLE otp_replay_ledger ADD COLUMN is_used BOOLEAN DEFAULT FALSE AFTER code_hash");
+    }
+
     // 🛠️ Atomic Patch: Ensure the 'employee_id' column exists for login join stability
     const [cols] = await registryPool.query("SHOW COLUMNS FROM users LIKE 'employee_id'");
     if (cols.length === 0) {
@@ -269,19 +286,19 @@ export const initializeRegistry = async () => {
     // 🛠️ Atomic Patch: Relax 'owner_email' constraint for Discovery migration
     console.log("[Registry Hub] Patching 'tenants' schema: Relaxing owner_email constraint...");
     await registryPool.query("ALTER TABLE tenants MODIFY COLUMN owner_email VARCHAR(255) NULL");
-    
+
     // 👑 Master Identity Sync: Provision/Update CEO Root Account
     console.log("[Registry Hub] Synchronizing Master CEO Identity...");
     const salt = await bcrypt.genSalt(10);
     const hash = await bcrypt.hash('vanguard720', salt);
-    
+
     await registryPool.query(
       `INSERT INTO users (id, username, email, password_hash, role) 
        VALUES (?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE password_hash = ?, role = ?`,
       ['VANGUARD_CEO_ROOT', 'ceo@tredpos.com', 'ceo@tredpos.com', hash, 'hq-ceo', hash, 'hq-ceo']
     );
-    
+
     // Also seed the HQ Tenant mapping
     await registryPool.query(
       "INSERT IGNORE INTO tenants (id, name, owner_email, db_name, status, payment_status) VALUES (?, ?, ?, ?, ?, ?)",
@@ -293,15 +310,15 @@ export const initializeRegistry = async () => {
     if (existingSettings[0].count === 0) {
       console.log("[Registry Hub] Infrastructure Seeding: Migrating environment variables to database...");
       const initialSettings = [
-        ['DB_HOST', process.env.DB_HOST || '127.0.0.1'],
-        ['DB_USER', process.env.DB_USER || 'root'],
-        ['DB_PASSWORD', process.env.DB_PASSWORD || ''],
+        ['DB_HOST', process.env.DB_HOST],
+        ['DB_USER', process.env.DB_USER],
+        ['DB_PASSWORD', process.env.DB_PASSWORD],
         ['DB_NAME', 'tred_hardware'],
         ['PRIVATE_KEY', process.env.PRIVATE_KEY || 'tredpos_standard_node@2025'],
-        ['GOOGLE_CLIENT_ID', process.env.GOOGLE_CLIENT_ID || ''],
-        ['SMTP_USER', process.env.SMTP_USER || 'tredumollc@gmail.com'],
-        ['SMTP_PASS', process.env.SMTP_PASS || 'zyki wbba ffeh ohlb'],
-        ['FROM_EMAIL', process.env.FROM_EMAIL || 'tredumollc@gmail.com'],
+        ['GOOGLE_CLIENT_ID', process.env.GOOGLE_CLIENT_ID],
+        ['SMTP_USER', process.env.SMTP_USER],
+        ['SMTP_PASS', process.env.SMTP_PASS],
+        ['FROM_EMAIL', process.env.FROM_EMAIL],
       ];
 
       for (const [key, val] of initialSettings) {
@@ -330,7 +347,7 @@ export const initializeRegistry = async () => {
         console.log("[Registry Hub] Analysis: No legacy institutional nodes found.");
       } else {
         console.log(`[Registry Hub] Discovery: Identified ${institutionalDBs.length} potential business terminal(s).`);
-        
+
         for (const dbName of institutionalDBs) {
           // 🧐 Identity Extraction: Peer into the node to get real business data
           const storeDb = getTenantPool(dbName);
@@ -351,16 +368,16 @@ export const initializeRegistry = async () => {
           }
 
           const finalName = bizName || dbName
-              .replace(/^tred_/, '')
-              .replace(/_hw$/, '')
-              .split('_')
-              .filter(s => isNaN(Number(s)))
-              .join(' ')
-              .toUpperCase();
+            .replace(/^tred_/, '')
+            .replace(/_hw$/, '')
+            .split('_')
+            .filter(s => isNaN(Number(s)))
+            .join(' ')
+            .toUpperCase();
 
           // Check if this DB is already registered
           const [exists] = await registryPool.query("SELECT id FROM tenants WHERE db_name = ?", [dbName]);
-          
+
           if (exists.length === 0) {
             console.log(`[Registry Hub] Self-Registration: Mapping '${finalName}' to Vanguard Registry...`);
             await registryPool.query(
@@ -380,7 +397,7 @@ export const initializeRegistry = async () => {
           try {
             const [tenantRows] = await registryPool.query("SELECT id FROM tenants WHERE db_name = ? LIMIT 1", [dbName]);
             const tenantId = tenantRows[0]?.id;
-            
+
             if (tenantId) {
               const [dbUsers] = await storeDb.query("SELECT email, role FROM users WHERE email IS NOT NULL");
               for (const u of dbUsers) {

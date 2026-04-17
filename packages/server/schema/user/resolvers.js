@@ -2,17 +2,54 @@ import { PRIVATE_KEY, getTenantPool, registryPool } from "../../config/config.js
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { OAuth2Client } from "google-auth-library";
-import { randomUUID } from "crypto";
+import { randomUUID, createHash, randomInt } from "crypto";
 import { provisionInstitution } from "../../utils/provisioner.js";
+import { sendMail } from "../../utils/mailer.js";
 import sharp from "sharp";
 import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
 
+// 🔐 TOTP Configuration Constants for institutional stability
+const TOTP_OPTIONS = { 
+    step: 300,   // 5 minute window (RFC 6238 period)
+    window: 1    // Allow ±1 period (300s before/after)
+};
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 const DEFAULT_ADMIN_MODULES = ['dashboard', 'pos', 'inventory', 'credit', 'hr', 'sales', 'reports', 'suppliers', 'expenses', 'returns'];
+
+/**
+ * 🔐 Stateful Identity Audit Protocol
+ * Transitioned from algorithmic TOTP to Pure Stateful Ledger (Registry Hub).
+ * Anchors recovery lifecycle in the database to eliminate clock drift dependencies.
+ */
+async function storeOTP(email, code) {
+    const codeHash = createHash('sha256').update(email.toLowerCase() + code).digest('hex');
+    await registryPool.query(
+        "INSERT INTO otp_replay_ledger (email, code_hash, is_used, expires_at) VALUES (?, ?, FALSE, DATE_ADD(NOW(), INTERVAL 15 MINUTE))",
+        [email.toLowerCase(), codeHash]
+    );
+}
+
+async function verifyStatefulOTP(email, code) {
+    const codeHash = createHash('sha256').update(email.toLowerCase() + code).digest('hex');
+    const [existing] = await registryPool.query(
+        "SELECT id FROM otp_replay_ledger WHERE email = ? AND code_hash = ? AND is_used = FALSE AND expires_at > NOW() ORDER BY created_at DESC LIMIT 1", 
+        [email.toLowerCase(), codeHash]
+    );
+    return existing.length > 0;
+}
+
+async function consumeOTP(email, code) {
+    const codeHash = createHash('sha256').update(email.toLowerCase() + code).digest('hex');
+    await registryPool.query(
+        "UPDATE otp_replay_ledger SET is_used = TRUE WHERE email = ? AND code_hash = ? AND is_used = FALSE",
+        [email.toLowerCase(), codeHash]
+    );
+}
 
 const USER_SCHEMA_SQL = [
     `CREATE TABLE IF NOT EXISTS users (
@@ -21,6 +58,7 @@ const USER_SCHEMA_SQL = [
     username VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) UNIQUE,
     password_hash VARCHAR(255),
+    otp_secret VARCHAR(255),
     role VARCHAR(100) DEFAULT 'PENDING_ASSIGNMENT',
     employee_id VARCHAR(50),
     is_active BOOLEAN DEFAULT TRUE,
@@ -484,14 +522,208 @@ export default {
                 throw new Error(`Factory Provisioning Failed: ${err.message}`);
             }
         },
+        requestPasswordReset: async (_, { email }) => {
+            const normalizedEmail = email.toLowerCase();
+            console.log(`[Identity Protocol] Initiating Recovery for: ${normalizedEmail}`);
+
+            // 🛡️ [Federated Discovery] Scan institutional clusters
+            const [allTenants] = await registryPool.query("SELECT db_name FROM tenants WHERE status != 'decommissioned'");
+            
+            // Deduplicate and filter out the registry core itself
+            const uniqueClusters = Array.from(new Set([
+                "tred_hardware", 
+                ...allTenants.map(t => t.db_name)
+            ])).filter(dbName => dbName !== 'tredpos_registry');
+
+            let targetPool = null;
+            let user = null;
+
+            for (const dbName of uniqueClusters) {
+                try {
+                    const pool = getTenantPool(dbName);
+                    // Identity scan across the current institutional horizon
+                    const [rows] = await pool.query("SELECT id, username, email, otp_secret FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?", [normalizedEmail, normalizedEmail]);
+                    if (rows.length > 0) {
+                        targetPool = pool;
+                        user = rows[0];
+                        console.log(`[Identity Protocol] Identity found in cluster: ${dbName}`);
+                        break;
+                    }
+                } catch (e) { 
+                    console.warn(`[Identity Protocol] Cluster scan failure on ${dbName}: ${e.message}`);
+                    continue; 
+                }
+            }
+
+            if (!user) {
+                // Return true to prevent identity enumeration
+                return true;
+            }
+
+            // Provision OTP Secret if missing (Base32 encoded random string)
+            let secret = user.otp_secret;
+            if (!secret) {
+                secret = generateSecret();
+                await targetPool.query("UPDATE users SET otp_secret = ? WHERE id = ?", [secret, user.id]);
+            }
+            // Infrastructure: Random Cryptographic OTP (Stateful)
+            const code = randomInt(100000, 999999).toString();
+            
+            // Persist to Stateful Identity Ledger
+            await storeOTP(normalizedEmail, code);
+            
+            console.log(`[Identity Protocol] Recovery authorized for ${normalizedEmail}. Dispatching 6-digit handshake.`);
+
+            // Dispatch Institutional Recovery Payload
+            try {
+                const info = await sendMail({
+                    to: normalizedEmail,
+                    subject: "TREDPOS: Identity Recovery Authorization",
+                    text: `
+Hello,
+
+We received a request to reset the password associated with an account.
+
+To proceed, please enter the verification code below:
+
+${code}
+
+This code is valid for 15 minutes and can only be used once. For your security, please do not share this code with anyone.
+
+If you are having trouble, ensure that you enter the code exactly as shown and within the valid time period.
+
+If you did not initiate this request, no further action is required. However, if you have concerns about your account security, we recommend reviewing your account activity or contacting support.
+
+For further assistance, please contact the support team through the appropriate channels.
+
+Thank you,
+Support Team
+                    `
+                });
+                console.log(`[Identity Protocol] Recovery payload dispatched successfully. MessageID: ${info?.messageId}`);
+            } catch (mailErr) {
+                console.error(`[Identity Protocol] CRITICAL: Recovery dispatch failed: ${mailErr.message}`);
+                throw new Error("Security Protocol Error: Institutional communication channel is currently unavailable.");
+            }
+
+            return true;
+        },
+        verifyPasswordResetCode: async (_, { email, code }) => {
+            const normalizedEmail = email.toLowerCase();
+            
+            // Federated Discovery
+            const [allTenants] = await registryPool.query("SELECT db_name FROM tenants WHERE status != 'decommissioned'");
+            const uniqueClusters = Array.from(new Set([
+                "tred_hardware", 
+                ...allTenants.map(t => t.db_name)
+            ])).filter(dbName => dbName !== 'tredpos_registry');
+
+            let user = null;
+            for (const dbName of uniqueClusters) {
+                try {
+                    const pool = getTenantPool(dbName);
+                    const [rows] = await pool.query("SELECT id, otp_secret FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?", [normalizedEmail, normalizedEmail]);
+                    if (rows.length > 0) {
+                        user = rows[0];
+                        break;
+                    }
+                } catch (e) { continue; }
+            }
+
+            if (!user || !user.otp_secret) throw new Error("Recovery Authorization Failed: Session Expired or Identity Invalid.");
+
+            try {
+                // 🛡️ Forensic Stateful Audit
+                const isValid = await verifyStatefulOTP(normalizedEmail, code);
+                if (!isValid) {
+                    throw new Error("Security Verification Failed: The authorization code provided is invalid, already used, or has expired.");
+                }
+
+                console.log(`[Identity Protocol] Handshake Verification for ${normalizedEmail}: ACCEPTED`);
+                return true;
+            } catch (err) {
+                console.error(`[Identity Protocol] Handshake Verification Failure: ${err.message}`);
+                if (err.message.includes('Unknown column')) {
+                    throw new Error("Institutional Schema Mismatch: This business terminal requires a maintenance update. Please contact Tred Industries.");
+                }
+                throw err;
+            }
+        },
+        finalizePasswordReset: async (_, { email, code, newPassword }) => {
+            try {
+                const normalizedEmail = email.toLowerCase();
+            
+            // Federated Discovery
+            const [allTenants] = await registryPool.query("SELECT db_name FROM tenants WHERE status != 'decommissioned'");
+            const uniqueClusters = Array.from(new Set([
+                "tred_hardware", 
+                ...allTenants.map(t => t.db_name)
+            ])).filter(dbName => dbName !== 'tredpos_registry');
+
+            let targetPool = null;
+            let user = null;
+
+            for (const dbName of uniqueClusters) {
+                try {
+                    const pool = getTenantPool(dbName);
+                    const [rows] = await pool.query("SELECT id, otp_secret, password_hash FROM users WHERE LOWER(email) = ? OR LOWER(username) = ?", [normalizedEmail, normalizedEmail]);
+                    if (rows.length > 0) {
+                        targetPool = pool;
+                        user = rows[0];
+                        break;
+                    }
+                } catch (e) { continue; }
+            }
+
+            if (!user || !user.otp_secret) throw new Error("Recovery Authorization Failed: Session Expired or Identity Invalid.");
+
+            // 🛡️ Forensic Stateful Audit: Block reuse for password commitment
+            const isValid = await verifyStatefulOTP(normalizedEmail, code);
+            if (!isValid) {
+                throw new Error("Security Verification Failed: This authorization code has already been consumed and cannot be reused for security finalization.");
+            }
+
+            console.log(`[Identity Protocol] Final Handshake Verification for ${normalizedEmail}: ACCEPTED`);
+
+            // Security Guardrail: Prevent Reuse of Current Password
+            const isSamePassword = await bcrypt.compare(newPassword, user.password_hash);
+            if (isSamePassword) {
+                throw new Error("Security Policy: Your new password cannot be the same as your current password. Please choose a distinct one.");
+            }
+
+            // Finalize Recovery: Re-hash and Persist
+            const password_hash = await bcrypt.hash(newPassword, 12);
+            await targetPool.query("UPDATE users SET password_hash = ? WHERE id = ?", [password_hash, user.id]);
+
+            // 🏁 🔐 Consume Identity Ledger Record
+            await consumeOTP(normalizedEmail, code);
+
+            console.log(`[Identity Protocol] Recovery SUCCESS for ${normalizedEmail} [Cluster: ${targetPool.config?.connectionConfig?.database}]`);
+
+            return true;
+        } catch (err) {
+            console.error(`[Identity Protocol] Recovery Finalization Failure: ${err.message}`);
+            // Map technical errors to friendly messages
+            if (err.message.includes('data and hash')) {
+                throw new Error("Security System Error: Failed to retrieve current identity state. Please try requesting a new code.");
+            }
+            if (err.message.includes('Unknown column')) {
+                throw new Error("Institutional Schema Mismatch: The database for this business requires a maintenance update. Please contact support.");
+            }
+            throw err;
+        }
+    },
         initializeUserDatabase: async (_, __, { db }) => {
             try {
                 // Ensure profile_picture column exists (Forensic Migration)
                 try {
                     await db.query("ALTER TABLE users ADD COLUMN profile_picture VARCHAR(255) AFTER authorized_modules");
-                } catch (e) {
-                    // Ignore if column already exists
-                }
+                } catch (e) {}
+
+                // Ensure otp_secret column exists (Recovery Migration)
+                try {
+                    await db.query("ALTER TABLE users ADD COLUMN otp_secret VARCHAR(255) AFTER password_hash");
+                } catch (e) {}
 
                 for (const sql of USER_SCHEMA_SQL) {
                     await db.query(sql);

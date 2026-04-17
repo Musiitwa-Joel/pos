@@ -15,7 +15,7 @@ const TredPosSEO: React.FC<TredPosSEOProps> = ({
   description,
   keywords,
   image = '/favicon/web-app-manifest-512x512.png',
-  url = 'https://tredpos.com',
+  url = 'https://pos.tredpos.com',
   type = 'website',
 }) => {
   const siteTitle = 'TredPos Industries';
@@ -23,7 +23,7 @@ const TredPosSEO: React.FC<TredPosSEOProps> = ({
   const defaultDescription = 'Global point-of-sale infrastructure for high-density commercial operations. Real-time telemetry, forensic ledgering, and multi-node synchronization.';
   const displayDescription = description || defaultDescription;
   const defaultKeywords = 'POS, TredPos, Institutional POS, Global Commerce, Ledger Sync, Retail Infrastructure, Forensic Ledger';
-  
+
   return (
     <Helmet>
       {/* Standard Metadata */}

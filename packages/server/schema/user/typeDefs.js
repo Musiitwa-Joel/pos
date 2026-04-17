@@ -30,5 +30,8 @@ export default `
     googleFinalizeProvisioning(tenantId: String!, password: String!): Boolean
     initializeUserDatabase: String
     updateProfilePicture(file: Upload!): User!
+    requestPasswordReset(email: String!): Boolean
+    verifyPasswordResetCode(email: String!, code: String!): Boolean
+    finalizePasswordReset(email: String!, code: String!, newPassword: String!): Boolean
   }
 `;

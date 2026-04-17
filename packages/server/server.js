@@ -9,6 +9,7 @@ try {
 }
 import { ApolloServer } from "@apollo/server";
 import { ApolloServerPluginDrainHttpServer } from "@apollo/server/plugin/drainHttpServer";
+import { ApolloServerPluginLandingPageLocalDefault, ApolloServerPluginLandingPageProductionDefault } from "@apollo/server/plugin/landingPage/default";
 import { expressMiddleware } from "@as-integrations/express5";
 import express from "express";
 import http from "http";
@@ -17,6 +18,13 @@ import fs from "fs";
 import path from "path";
 import multer from "multer";
 import graphqlUploadExpress from "graphql-upload/graphqlUploadExpress.mjs";
+import helmet from "helmet";
+import compression from "compression";
+import hpp from "hpp";
+import { rateLimit } from "express-rate-limit";
+import pino from "pino";
+import pinoHttp from "pino-http";
+import depthLimit from "graphql-depth-limit";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 import { typeDefs, resolvers } from "./schema/index.js";
@@ -35,25 +43,76 @@ import { db, getTenantPool } from "./config/config.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+// Institutional Telemetry Posture
+const isProd = process.env.NODE_ENV === "production";
+const logger = pino({
+  level: isProd ? "info" : "debug",
+  transport: isProd ? undefined : { target: "pino-pretty" }
+});
+
 // Debug logging
 process.on('uncaughtException', (err) => {
-  fs.writeFileSync('server_error.log', `Uncaught Exception: ${err.message}\n${err.stack}\n`);
-  console.error('Uncaught Exception:', err);
+  logger.error({ err }, 'Uncaught Exception detected');
+  fs.appendFileSync('server_error.log', `[${new Date().toISOString()}] Uncaught Exception: ${err.message}\n${err.stack}\n`);
   process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  fs.writeFileSync('server_error.log', `Unhandled Rejection: ${reason}\n`);
-  console.error('Unhandled Rejection:', reason);
+  logger.error({ reason }, 'Unhandled Rejection detected');
+  fs.appendFileSync('server_error.log', `[${new Date().toISOString()}] Unhandled Rejection: ${reason}\n`);
 });
 
 
 // Required logic for integrating with Express
 const app = express();
 
-// Server Health Endpoint for pro-active monitoring
-// Moved to the top and given explicit CORS to avoid dashboard pings failing due to middleware lag
+// Security Hardening Layer (Vanguard Protocol)
+app.use(helmet({
+  contentSecurityPolicy: isProd ? undefined : false, // Disable CSP in dev for sandbox
+  crossOriginResourcePolicy: { policy: "cross-origin" } // Allow images to be loaded by the frontend
+}));
+app.use(compression());
+app.use(hpp());
+
+// Rate Limiting Hub (Anti-DDoS)
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: isProd ? 100 : 1000, // Stricter in production
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { success: false, message: "Too many requests from this IP, please try again later." },
+  skip: (req) => req.path === '/health'
+});
+
+// Health Endpoint (Restricted)
 app.get("/health", cors("*"), (req, res) => res.status(200).send("OK"));
+
+// Request Auditing
+app.use(pinoHttp({ logger }));
+
+// Static Asset Anchoring (Institutional Blueprint)
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+app.use(express.static(path.join(__dirname, "public")));
+app.use("/uploads", cors(), express.static(path.join(__dirname, "uploads")));
+app.use("/backups", cors(), express.static(path.join(__dirname, "backups")));
+
+// CORS Whitelisting logic
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").filter(Boolean);
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!isProd || !origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by Institutional CORS Policy"));
+    }
+  }
+}));
+
+app.use(express.json());
+app.use(limiter); // Apply rate limiting to all routes
+app.use("/api/inventory", inventoryRouter);
+
+const httpServer = http.createServer(app);
 
 const uploadsDirUrl = new URL("./public/uploads/onboarding", import.meta.url);
 const uploadsDirPath = fileURLToPath(uploadsDirUrl);
@@ -82,19 +141,6 @@ const onboardingUpload = multer({
   storage: uploadStorage,
   limits: { fileSize: 10 * 1024 * 1024 },
 });
-
-// Our httpServer handles incoming requests to our Express app.
-// Below, we tell Apollo Server to "drain" this httpServer,
-// enabling our servers to shut down gracefully.
-
-app.use(express.static("public"));
-app.use("/uploads", express.static("uploads"));
-app.use("/backups", express.static("backups"));
-app.use(cors()); // Enable CORS for ALL routes
-app.use(express.json());
-app.use("/api/inventory", inventoryRouter);
-
-const httpServer = http.createServer(app);
 
 
 app.post("/uploads/onboarding", cors("*"), (req, res) => {
@@ -174,8 +220,8 @@ app.post("/api/auth/change-password", cors("*"), async (req, res) => {
     const hashedPwd = await bcrypt.hash(newPassword, salt);
 
     await db.execute(
-      `UPDATE users SET password_hash = ?, password = ?, is_system_generated = 0, updated_at = NOW() WHERE id = ?`,
-      [hashedPwd, hashedPwd, userId]
+      `UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?`,
+      [hashedPwd, userId]
     );
 
     return res.json({
@@ -229,10 +275,26 @@ const serverCleanup = useServer({
 
 const server = new ApolloServer({
   schema,
-  introspection: true,
+  introspection: !isProd,
+  validationRules: [depthLimit(7)],
+  formatError: (formattedError, error) => {
+    // Audit internal errors without leaking forensics to client
+    if (isProd) {
+      logger.error({ error }, "Internal GraphQL Error");
+      return {
+        message: "Internal Laboratory Error [Reference: " + randomUUID() + "]",
+        extensions: { code: "INTERNAL_SERVER_ERROR" }
+      };
+    }
+    return formattedError;
+  },
   plugins: [
     // Proper shutdown for the HTTP server.
     ApolloServerPluginDrainHttpServer({ httpServer }),
+    // Institutional Landing Page Configuration
+    isProd 
+      ? ApolloServerPluginLandingPageProductionDefault({ footer: false })
+      : ApolloServerPluginLandingPageLocalDefault(),
     // Proper shutdown for the WebSocket server.
     {
       async serverWillStart() {

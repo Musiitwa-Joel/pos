@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 
-type AuthMode = 'login' | 'signup';
+type AuthMode = 'login' | 'signup' | 'forgot';
 
 interface AuthContextType {
   showAuthModal: boolean;

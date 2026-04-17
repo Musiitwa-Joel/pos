@@ -38,3 +38,21 @@ export const INITIALIZE_USER_DB = gql`
     initializeUserDatabase
   }
 `;
+
+export const REQUEST_PASSWORD_RESET = gql`
+  mutation RequestPasswordReset($email: String!) {
+    requestPasswordReset(email: $email)
+  }
+`;
+
+export const VERIFY_PASSWORD_RESET_CODE = gql`
+  mutation VerifyPasswordResetCode($email: String!, $code: String!) {
+    verifyPasswordResetCode(email: $email, code: $code)
+  }
+`;
+
+export const FINALIZE_PASSWORD_RESET = gql`
+  mutation FinalizePasswordReset($email: String!, $code: String!, $newPassword: String!) {
+    finalizePasswordReset(email: $email, code: $code, newPassword: $newPassword)
+  }
+`;
