@@ -23,7 +23,7 @@ import { Product } from "../types";
 import Modal from "./Modal";
 import Select from "./Select";
 import { toast } from "sonner";
-import { API_BASE_URL } from "../HardwareContext";
+import { API_BASE_URL } from "../lib/apollo";
 
 export default function Inventory() {
   const {

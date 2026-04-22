@@ -30,7 +30,7 @@ import { useHardware } from "./HardwareContext";
 import { cn } from "./lib/utils";
 import { toast } from "sonner";
 import TopLoader from "./components/TopLoader";
-import { API_BASE_URL } from "./HardwareContext";
+import { API_BASE_URL } from "./lib/apollo";
 
 // 🏗️ Deferred Module Loading (Code Splitting)
 const Dashboard = React.lazy(() => import("./components/Dashboard"));
@@ -274,11 +274,11 @@ export default function AppShell() {
 
     const authorizedIds = currentUser.authorizedModules || [];
     const isActuallyAuthorized = authorizedIds.includes(currentView);
-    
+
     if (!isActuallyAuthorized && authorizedIds.length > 0) {
       // Find the first module in the logical navItems order that the user is actually authorized for
       const firstAvailable = navItems.find(item => authorizedIds.includes(item.id as any));
-      
+
       if (firstAvailable) {
         // console.log(`[TredPOS Security] Re-aligning landing view to hierarchy: ${firstAvailable.id}`);
         setCurrentView(firstAvailable.id as View);

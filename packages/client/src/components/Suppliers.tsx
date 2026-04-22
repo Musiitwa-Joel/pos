@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { Truck, Phone, Mail, Plus, Search, ChevronRight, DollarSign, Upload, AlertTriangle, History, ArrowDownLeft, Loader2 } from 'lucide-react';
-import { useHardware, API_BASE_URL } from '../HardwareContext';
+import { useHardware } from '../HardwareContext';
+import { API_BASE_URL } from '../lib/apollo';
 import { Supplier } from '../types';
 import Modal from './Modal';
 import { toast } from 'sonner';

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { ApolloClient, InMemoryCache, ApolloProvider, gql } from '@apollo/client';
-import { createUploadLink } from 'apollo-upload-client';
+import { gql } from '@apollo/client';
+import { apolloClient as client, API_BASE_URL, getUploadLink, uploadLink } from './lib/apollo';
 import { Product, Sale, Customer, Supplier, Expense, User, Employee, Role, AttendanceRecord, Promotion, CashierShift, CartItem, PaymentMethod } from './types';
 import { GET_EMPLOYEES, GET_ATTENDANCE } from './gql/queries/hr';
 import {
@@ -57,8 +57,6 @@ import {
 } from './gql/mutations/inventory';
 import { jwtDecode } from 'jwt-decode';
 import { toast } from 'sonner';
-import { setContext } from '@apollo/client/link/context';
-import { onError } from '@apollo/client/link/error';
 
 const UPDATE_PROFILE_PICTURE = gql`
   mutation UpdateProfilePicture($file: Upload!) {
@@ -165,72 +163,7 @@ interface HardwareContextType {
 
 const HardwareContext = createContext<HardwareContextType | undefined>(undefined);
 
-// Dynamic API resolution for Cloud Hosting support
-const getApiBaseUrl = () => {
-  try {
-    // Check for Vite meta (env) - use string indexing to bypass strict module checks
-    // @ts-ignore
-    const meta = (import.meta as any);
-    const viteEnv = meta.env?.VITE_API_BASE_URL;
-    if (viteEnv) return viteEnv;
-
-    // Check Bun/Node-style env
-    const nodeEnv = typeof process !== 'undefined' ? process.env?.VITE_API_BASE_URL : null;
-    if (nodeEnv) return nodeEnv;
-  } catch (e) {
-    // Fallback if import.meta is not supported or env is missing
-  }
-
-  return `http://${window.location.hostname}:9000`;
-};
-
-export const API_BASE_URL = getApiBaseUrl();
-
-const uploadLink = createUploadLink({
-  uri: `${API_BASE_URL}/graphql`,
-  headers: {
-    "Apollo-Require-Preflight": "true",
-  },
-});
-
-const authLink = setContext((_, { headers }) => {
-  const token = localStorage.getItem('khms_token');
-  return {
-    headers: {
-      ...headers,
-      authorization: token ? `Bearer ${token}` : "",
-      "Apollo-Require-Preflight": "true"
-    }
-  };
-});
-
-const errorLink = onError(({ graphQLErrors, networkError }) => {
-  if (graphQLErrors) {
-    for (const err of graphQLErrors) {
-      if (err.extensions?.code === 'UNAUTHENTICATED' || err.message?.includes('expired token')) {
-        // Dispatched as a CustomEvent to handle React state outside the link
-        window.dispatchEvent(new CustomEvent(FORCE_LOGOUT_EVENT));
-        break;
-      }
-    }
-  }
-  if (networkError) {
-    if ('statusCode' in networkError && (networkError.statusCode === 401 || networkError.statusCode === 403)) {
-      window.dispatchEvent(new CustomEvent(FORCE_LOGOUT_EVENT));
-    } else {
-      // General network error (e.g. 503 Service Unavailable or 408 Timeout)
-      console.error('[Apollo Network Error]', networkError);
-    }
-  }
-});
-
-
-
 export const HardwareProvider = ({ children }: { children: React.ReactNode }) => {
-  const client = useMemo(() => new ApolloClient({
-    link: errorLink.concat(authLink.concat(uploadLink)),
-    cache: new InMemoryCache(),
-  }), []);
 
   // Persistence for non-HR modules
   const [products, setProducts] = useState<Product[]>([]);
@@ -732,13 +665,7 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
         });
 
         // Refresh client headers
-        client.setLink(createUploadLink({
-          uri: `${API_BASE_URL}/graphql`,
-          headers: {
-            authorization: `Bearer ${token}`,
-            "Apollo-Require-Preflight": "true"
-          }
-        }));
+        client.setLink(getUploadLink(token));
 
         toast.success('Logged in successfully');
         return token;
@@ -1724,11 +1651,9 @@ export const HardwareProvider = ({ children }: { children: React.ReactNode }) =>
   ]);
 
   return (
-    <ApolloProvider client={client}>
-      <HardwareContext.Provider value={contextValue}>
-        {children}
-      </HardwareContext.Provider>
-    </ApolloProvider>
+    <HardwareContext.Provider value={contextValue}>
+      {children}
+    </HardwareContext.Provider>
   );
 };
 
