@@ -16,15 +16,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
 
-  const openAuth = (mode: AuthMode) => {
+  const openAuth = React.useCallback((mode: AuthMode) => {
     setAuthMode(mode);
     setShowAuthModal(true);
-  };
+  }, []);
 
-  const closeAuth = () => setShowAuthModal(false);
+  const closeAuth = React.useCallback(() => setShowAuthModal(false), []);
+
+  const value = React.useMemo(() => ({
+    showAuthModal,
+    authMode,
+    openAuth,
+    closeAuth,
+    setMode: setAuthMode
+  }), [showAuthModal, authMode, openAuth, closeAuth]);
 
   return (
-    <AuthContext.Provider value={{ showAuthModal, authMode, openAuth, closeAuth, setMode: setAuthMode }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

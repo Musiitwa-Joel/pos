@@ -27,6 +27,11 @@
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
+  "include": [
+    "src",
+    "assets",
+    "src/bun-env.d.ts"
+  ],
   "exclude": [
     "node_modules"
   ]

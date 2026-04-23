@@ -22,7 +22,7 @@ export const getApiBaseUrl = () => {
     } catch (e) {
         // Environment extraction failed, falling back to local horizon
     }
-    return `http://${window.location.hostname}:9000`;
+    return `https://pos.tredumo.com`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

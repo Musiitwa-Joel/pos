@@ -3673,10 +3673,6 @@
     --tw-tracking: 0.25em;
     letter-spacing: 0.25em;
   }
-  .tracking-\[1em\] {
-    --tw-tracking: 1em;
-    letter-spacing: 1em;
-  }
   .tracking-\[2px\] {
     --tw-tracking: 2px;
     letter-spacing: 2px;
@@ -3923,12 +3919,6 @@
   }
   .text-neo-orange {
     color: var(--color-neo-orange);
-  }
-  .text-neo-orange\/30 {
-    color: color-mix(in srgb, #ff6b00 30%, transparent);
-    @supports (color: color-mix(in lab, red, red)) {
-      color: color-mix(in oklab, var(--color-neo-orange) 30%, transparent);
-    }
   }
   .text-orange-400 {
     color: var(--color-orange-400);
@@ -7273,12 +7263,6 @@
       box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
   }
-  .sm\:shadow-none {
-    @media (width >= 40rem) {
-      --tw-shadow: 0 0 #0000;
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-    }
-  }
   .sm\:group-hover\:opacity-100 {
     @media (width >= 40rem) {
       &:is(:where(.group):hover *) {
@@ -8161,12 +8145,6 @@
       overflow-y: auto;
     }
   }
-  .lg\:border-2 {
-    @media (width >= 64rem) {
-      border-style: var(--tw-border-style);
-      border-width: 2px;
-    }
-  }
   .lg\:border-r {
     @media (width >= 64rem) {
       border-right-style: var(--tw-border-style);
@@ -8177,14 +8155,6 @@
     @media (width >= 64rem) {
       border-bottom-style: var(--tw-border-style);
       border-bottom-width: 0px;
-    }
-  }
-  .lg\:bg-neo-orange\/5 {
-    @media (width >= 64rem) {
-      background-color: color-mix(in srgb, #ff6b00 5%, transparent);
-      @supports (color: color-mix(in lab, red, red)) {
-        background-color: color-mix(in oklab, var(--color-neo-orange) 5%, transparent);
-      }
     }
   }
   .lg\:bg-transparent {
@@ -8262,12 +8232,6 @@
   .lg\:text-\[120px\] {
     @media (width >= 64rem) {
       font-size: 120px;
-    }
-  }
-  .lg\:shadow-\[10px_10px_0px_0px_rgba\(0\,0\,0\,1\)\] {
-    @media (width >= 64rem) {
-      --tw-shadow: 10px 10px 0px 0px var(--tw-shadow-color, rgba(0,0,0,1));
-      box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
     }
   }
   .lg\:shadow-lg {
