@@ -375,6 +375,7 @@ export default `
     saleReturn(id: ID!): SaleReturn
     cashierShifts(startDate: String, endDate: String): [CashierShift!]!
     activeShift(cashierId: ID!): CashierShift
+    lastClosedShift(cashierId: ID!): CashierShift
     getShiftExpected(id: ID!): CashierShift!
     allCustomerPayments(startDate: String, endDate: String): [CustomerPayment!]!
     getProfitReport(startDate: String!, endDate: String!): ProfitReport!

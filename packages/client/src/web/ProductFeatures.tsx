@@ -1,4 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
+import { observer } from '@legendapp/state/react';
 import { motion } from 'motion/react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -30,7 +31,7 @@ if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-export default function ProductFeatures() {
+export default observer(function ProductFeatures() {
   const { openAuth } = useAuth();
 
   const featureModules = [
@@ -275,4 +276,4 @@ export default function ProductFeatures() {
       </section>
     </div>
   );
-}
+});

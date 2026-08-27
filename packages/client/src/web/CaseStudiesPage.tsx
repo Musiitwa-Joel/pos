@@ -1,4 +1,5 @@
 import React from 'react';
+import { observer } from '@legendapp/state/react';
 import { motion } from 'motion/react';
 import { 
   BarChart3, 
@@ -15,7 +16,7 @@ import { cn } from '../lib/utils';
 import { useQuery } from '@apollo/client';
 import { GET_CASE_STUDIES } from '../gql/website';
 
-export default function CaseStudiesPage() {
+export default observer(function CaseStudiesPage() {
   const { data: caseRes } = useQuery(GET_CASE_STUDIES);
   const registryCases = caseRes?.getCaseStudies || [];
 
@@ -169,4 +170,4 @@ export default function CaseStudiesPage() {
       </section>
     </div>
   );
-}
+});

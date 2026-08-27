@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import TredPosSEO from '../components/common/TredPosSEO';
 import {
@@ -20,10 +20,14 @@ import { useQuery } from '@apollo/client';
 import { GET_WEBSITE_PRICING } from '../gql/website';
 import { cn } from '../lib/utils';
 
-export default function PricingDetail() {
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function PricingDetail() {
    const { data } = useQuery(GET_WEBSITE_PRICING);
    const masterPlan = data?.getWebsitePricing;
-   const [nodes, setNodes] = useState<number>(1);
+   const nodes = webState$.ui.nodeCount?.get() || 1;
+   const setNodes = (val: number) => webState$.ui.nodeCount.set(val);
 
    // Dynamic Monthly Rate from Registry Terminal
    const monthlyRate = masterPlan?.calculatorBaseRate || 50000;
@@ -262,4 +266,4 @@ export default function PricingDetail() {
          </div>
       </div>
    );
-}
+});

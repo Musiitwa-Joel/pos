@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Mail,
@@ -17,15 +17,17 @@ import { cn } from '../lib/utils';
 import { useQuery, useMutation } from '@apollo/client';
 import { SUBMIT_CONTACT_INQUIRY, GET_CONTACT_CONFIG } from '../gql/website';
 
-export default function ContactPage() {
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    subject: 'General Inquiry',
-    message: ''
-  });
-  const [submitted, setSubmitted] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function ContactPage() {
+  const formData = webState$.contact.formData.get();
+  const submitted = webState$.contact.submitted.get();
+  const isSubmitting = webState$.contact.isSubmitting.get();
+
+  const setFormData = (val: any) => webState$.contact.formData.set(val);
+  const setSubmitted = (val: boolean) => webState$.contact.submitted.set(val);
+  const setIsSubmitting = (val: boolean) => webState$.contact.isSubmitting.set(val);
 
   const { data: configData } = useQuery(GET_CONTACT_CONFIG);
   const supportEmail = configData?.getContactConfig?.support_email || 'ops@tredpos.com';
@@ -283,4 +285,4 @@ export default function ContactPage() {
       </section>
     </div>
   );
-}
+});

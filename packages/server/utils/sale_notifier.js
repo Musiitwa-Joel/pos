@@ -140,9 +140,8 @@ export const notifySaleToAdmin = async (db, sale) => {
     `;
 
     // 2.3 Prepare High-Res Email Wordmark
-    const wordMarkEmailBuffer = await sharp(path.join(process.cwd(), 'public', 'logos', 'wordlogo.svg'))
+    const wordMarkEmailBuffer = await sharp(path.join(process.cwd(), 'public', 'logos', 'tredposwordlogo.png'))
       .resize(800) // Render internal width high
-      .png({ density: 300 })
       .toBuffer();
 
     // 3. Enqueue Email for background dispatch

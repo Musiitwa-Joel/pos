@@ -1,6 +1,7 @@
 import { db, getTenantPool } from "../config/config.js";
 import { INVENTORY_SCHEMA_SQL } from "./schema.js";
 import { randomUUID } from "crypto";
+import { v7 as uuidv7 } from "uuid";
 import bcrypt from "bcrypt";
 import { sendMail } from "./mailer.js";
 
@@ -200,10 +201,11 @@ export const provisionInstitution = async (tenantData, password) => {
     // 5. Provision the Master Institutional Administrator
     const adminId = randomUUID();
     const passwordHash = await bcrypt.hash(password, 10);
+    const allModulesList = JSON.stringify(['dashboard', 'pos', 'inventory', 'credit', 'hr', 'sales', 'reports', 'suppliers', 'expenses', 'returns', 'settings']);
 
     await tenantPool.query(
-      `INSERT INTO \`${db_name}\`.users (id, username, email, password_hash, role) VALUES (?, ?, ?, ?, 'ADMIN')`,
-      [adminId, owner_email, owner_email, passwordHash]
+      `INSERT INTO \`${db_name}\`.users (id, username, email, password_hash, role, authorized_modules) VALUES (?, ?, ?, ?, 'ADMIN', ?)`,
+      [adminId, owner_email, owner_email, passwordHash, allModulesList]
     );
     console.log(`[Tredpos Factory] Institutional Administrator Provisioned.`);
 

@@ -1,32 +1,49 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertCircle, AlertTriangle, Info, HelpCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Info } from 'lucide-react';
+import { observer } from '@legendapp/state/react';
 import { cn } from '../lib/utils';
 
 interface ConfirmDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  title: string;
-  message: string;
+  ui$?: any; // The record-observable for high-perf blades
+  isOpen?: boolean;
+  onClose?: () => void;
+  onConfirm?: () => void;
+  title?: string;
+  message?: string;
   confirmText?: string;
   cancelText?: string;
   type?: 'danger' | 'warning' | 'info';
   isLoading?: boolean;
 }
 
-export default function ConfirmDialog({
-  isOpen,
-  onClose,
-  onConfirm,
-  title,
-  message,
-  confirmText = "CONFIRM_ACTION",
-  cancelText = "CANCEL",
-  type = 'danger',
-  isLoading = false
-}: ConfirmDialogProps) {
+export default observer(function ConfirmDialog(props: ConfirmDialogProps) {
+  // 🛰️ [VANGUARD] Polymorphic Data Extraction:
+  // Detect if we are using an observable blade or legacy primitive props.
+  const isObservable = !!props.ui$ && typeof props.ui$.get === 'function';
   
+  const uiData = isObservable ? props.ui$.get() : {
+    isOpen: props.isOpen,
+    title: props.title,
+    message: props.message,
+    confirmText: props.confirmText || "CONFIRM_ACTION",
+    cancelText: props.cancelText || "CANCEL",
+    type: props.type || 'danger',
+    onConfirm: props.onConfirm
+  };
+
+  const {
+    isOpen,
+    title,
+    message,
+    confirmText = "CONFIRM_ACTION",
+    cancelText = "CANCEL",
+    type = 'danger',
+    onConfirm
+  } = uiData;
+  
+  const isProcessing = (isObservable ? uiData.isLoading : props.isLoading) || false;
+
   const iconMap = {
     danger: <AlertCircle className="text-red-500" size={22} />,
     warning: <AlertTriangle className="text-amber-500" size={22} />,
@@ -39,6 +56,15 @@ export default function ConfirmDialog({
     info: "bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-900/20"
   };
 
+  const handleClose = () => {
+    if (isProcessing) return;
+    if (isObservable) {
+      props.ui$.set((prev: any) => ({ ...prev, isOpen: false }));
+    } else if (props.onClose) {
+      props.onClose();
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -48,7 +74,7 @@ export default function ConfirmDialog({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={!isLoading ? onClose : undefined}
+            onClick={handleClose}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
 
@@ -77,24 +103,24 @@ export default function ConfirmDialog({
 
               <div className="flex justify-end gap-3 pt-4 border-t border-brand-steel/20">
                 <button
-                  onClick={onClose}
-                  disabled={isLoading}
+                  onClick={handleClose}
+                  disabled={isProcessing}
                   className="px-4 py-2 text-[10px] font-display text-slate-500 hover:text-[var(--text-main)] transition-all hover:bg-white/5 disabled:opacity-50"
                 >
                   {cancelText}
                 </button>
                 <button
                   onClick={async () => {
-                    await onConfirm();
-                    onClose();
+                    if (onConfirm) await onConfirm();
+                    handleClose();
                   }}
-                  disabled={isLoading}
+                  disabled={isProcessing}
                   className={cn(
                     "px-6 py-2 text-[10px] font-display font-bold tracking-widest rounded-sm transition-all disabled:opacity-50 flex items-center gap-2",
                     buttonClassMap[type]
                   )}
                 >
-                  {isLoading && (
+                  {isProcessing && (
                     <motion.div
                       animate={{ rotate: 360 }}
                       transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
@@ -110,4 +136,4 @@ export default function ConfirmDialog({
       )}
     </AnimatePresence>
   );
-}
+});

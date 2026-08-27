@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@400;700;900&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Michroma&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300..800;1,300..800&family=JetBrains+Mono:wght@400;500;700&display=swap");
 @import "tailwindcss";
 @source "../";
 
@@ -12,17 +12,17 @@
   --color-warning: #d97706;
   --color-danger: #dc2626;
 
-  --font-display: "Michroma", "Bank Gothic", sans-serif;
-  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --font-display: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
 
-  /* NEO-BRUTALIST TOKENS for WOW FACTOR */
+  /* NEO-BRUTALIST TOKENS */
   --color-cream: #fefce8;
   --color-neo-orange: #ff6b00;
   --color-neo-blue: #0066ff;
   --color-neo-green: #00ff66;
-  --font-neo-display: "Space Grotesk", sans-serif;
-  --font-neo-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-neo-display: "Plus Jakarta Sans", sans-serif;
+  --font-neo-sans: "Plus Jakarta Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
@@ -44,6 +44,21 @@
 }
 
 @layer base {
+  *,
+  *::before,
+  *::after,
+  html,
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  .font-mono,
+  .font-display,
+  .font-sans {
+    font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif !important;
+  }
+
   body {
     @apply bg-brand-dark text-[var(--text-main)] antialiased font-sans selection:bg-brand-accent/30;
     background-image:
@@ -57,7 +72,7 @@
   h3,
   h4,
   .font-display {
-    @apply font-display tracking-tight uppercase text-[var(--text-main)];
+    @apply font-sans tracking-tight text-[var(--text-main)];
   }
 }
 

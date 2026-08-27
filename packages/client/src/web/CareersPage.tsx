@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery } from '@apollo/client';
 import { GET_CAREERS_DATA } from '../gql/website';
@@ -28,9 +28,13 @@ const IconMap: Record<string, any> = {
   Globe, Zap, ShieldCheck, Rocket, Cpu, Users, Target, Activity
 };
 
-export default function CareersPage() {
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function CareersPage() {
   const { data, loading } = useQuery(GET_CAREERS_DATA);
-  const [selectedJob, setSelectedJob] = useState<any>(null);
+  const selectedJob = webState$.ui.selectedJob.get();
+  const setSelectedJob = (val: any) => webState$.ui.selectedJob.set(val);
 
   const openRoles = data?.getOpenPositions || [];
   const perks = data?.getJobPerks || [];
@@ -253,4 +257,4 @@ export default function CareersPage() {
       </section>
     </div>
   );
-}
+});

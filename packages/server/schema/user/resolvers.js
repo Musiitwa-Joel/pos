@@ -755,7 +755,7 @@ Support Team
 
             const extension = path.extname(filename) || '.jpg';
             const storedFileName = `${user.id}-${Date.now()}${extension}`;
-            const uploadsDir = path.join(__dirname, "../../uploads/avatars");
+            const uploadsDir = path.join(__dirname, "../../public/uploads/avatars");
             const filePath = path.join(uploadsDir, storedFileName);
 
             // 🚀 [Vanguard Optimization] Stream & Circular Compress

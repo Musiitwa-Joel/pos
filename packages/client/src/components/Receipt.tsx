@@ -17,7 +17,7 @@ interface ReceiptProps {
   settings?: Record<string, string>;
 }
 
-export default function Receipt({ sale, settings }: ReceiptProps) {
+export default React.memo(function Receipt({ sale, settings }: ReceiptProps) {
   if (!sale) return null;
 
   return (
@@ -26,7 +26,7 @@ export default function Receipt({ sale, settings }: ReceiptProps) {
         <img src={fullLogo} alt="Logo" className="h-16 w-auto object-contain grayscale" />
       </div>
       <div className="text-center space-y-1 mb-4">
-        <h2 className="text-[14px] font-bold uppercase">{settings?.COMPANY_NAME || 'DARLINGTON HARDWARE'}</h2>
+        <h2 className="text-[14px] font-bold uppercase">{settings?.COMPANY_NAME || 'TREDUMO POS'}</h2>
         <p>{settings?.LOCATION || 'Plot 42, Kampala Industrial Area'}</p>
         <p>Tel: {settings?.SUPPORT_PHONE || '+256 700 000 000'}</p>
         <div className="border-b border-black border-dashed my-2" />
@@ -89,4 +89,4 @@ export default function Receipt({ sale, settings }: ReceiptProps) {
       <div className="h-12" />
     </div>
   );
-}
+});

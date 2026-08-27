@@ -199,8 +199,8 @@ export const GET_CASHIER_SHIFTS = gql`
       actualCash
       variance
       status
-      shiftId
       cashierName
+      cashTotal
       digitalTotal
       creditTotal
       recoveryTotal
@@ -217,6 +217,12 @@ export const GET_ACTIVE_SHIFT = gql`
       startTime
       openingCash
       status
+      expectedCash
+      cashTotal
+      digitalTotal
+      creditTotal
+      recoveryTotal
+      refundsTotal
     }
   }
 `;

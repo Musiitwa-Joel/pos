@@ -9,12 +9,22 @@ import { onError } from '@apollo/client/link/error';
  * and ensure singleton behavior across production bundles.
  */
 
-// Dynamic API resolution
+// Dynamic API resolution with institutional fallback resilience
 export const getApiBaseUrl = () => {
     try {
         // @ts-ignore - Handle various environment injection patterns
         const meta = (import.meta as any);
         const viteEnv = meta.env?.VITE_API_BASE_URL;
+        
+        // If we have a valid environment override, prioritize it
+        if (viteEnv && !viteEnv.includes("localhost")) return viteEnv;
+
+        // If we're on a hosted production domain but the signal is missing or localhost,
+        // we intelligently reconverge to the current origin.
+        if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
+            return window.location.origin;
+        }
+
         if (viteEnv) return viteEnv;
 
         const nodeEnv = typeof process !== 'undefined' ? process.env?.VITE_API_BASE_URL : null;
@@ -22,7 +32,7 @@ export const getApiBaseUrl = () => {
     } catch (e) {
         // Environment extraction failed, falling back to local horizon
     }
-    return `https://pos.tredumo.com`;
+    return `http://localhost:9000`;
 };
 
 export const API_BASE_URL = getApiBaseUrl();

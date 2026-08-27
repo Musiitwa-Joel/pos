@@ -6,19 +6,14 @@ import { formatCurrency } from './format.js';
 export const generateReceiptPDF = async (sale, settings = {}) => {
   // Pre-process logos for PDF compatibility (PDFKit doesn't natively support SVG well)
   const logoDir = path.join(process.cwd(), 'public', 'logos');
-  // Increase density for high-res thermal printing and explicitly resize to ensure crispness
-  const wordMarkBuffer = await sharp(path.join(logoDir, 'wordlogo.svg'))
-    .resize(1200) // Render internal width high
-    .png({ density: 600 }) 
+  const wordMarkBuffer = await sharp(path.join(logoDir, 'tredposwordlogo.png'))
+    .resize(1200)
     .toBuffer();
-    
-  const waterMarkBuffer = await sharp(path.join(logoDir, 'fulllogo.svg'))
+
+  const waterMarkBuffer = await sharp(path.join(logoDir, 'tredposwordlogo.png'))
     .resize(800)
     .grayscale()
-    // Bake the "faintness" into the pixels directly:
-    // This maps black (0) to ~240 (very light gray) and white (255) stays white.
-    .linear(0.05, 242) 
-    .png({ density: 300 })
+    .linear(0.05, 242)
     .toBuffer();
 
   return new Promise((resolve, reject) => {
@@ -36,7 +31,7 @@ export const generateReceiptPDF = async (sale, settings = {}) => {
     // --- Branding Watermark (Faded Background) ---
     doc.save();
     // Baked-in pixels (sharp.linear) + PDFKit opacity ensure transparency on all environments
-    doc.image(waterMarkBuffer, 63, 150, { width: 100, opacity: 0.08 }); 
+    doc.image(waterMarkBuffer, 63, 150, { width: 100, opacity: 0.08 });
     doc.restore();
 
     // --- Header Branding ---
@@ -47,14 +42,14 @@ export const generateReceiptPDF = async (sale, settings = {}) => {
     doc.fontSize(10).font('Helvetica-Bold').text(settings.COMPANY_NAME || 'DARLINGTON HARDWARE', { align: 'center' });
     doc.fontSize(7).font('Helvetica').text(settings.LOCATION || 'Plot 42, Kampala Industrial Area', { align: 'center' });
     doc.text(`Tel: ${settings.SUPPORT_PHONE || '+256 700 000 000'}`, { align: 'center' });
-    
+
     doc.moveDown(0.5);
     doc.moveTo(10, doc.y).lineTo(216, doc.y).dash(2, { space: 2 }).stroke().undash();
     doc.moveDown(0.5);
 
     doc.fontSize(7).font('Helvetica-Bold').text(`RECEIPT NO: ${sale.id}`, { align: 'center' });
     doc.fontSize(6).font('Helvetica').text(`DATE: ${new Date(sale.createdAt).toLocaleString()}`, { align: 'center' });
-    
+
     doc.moveDown(0.5);
     doc.moveTo(10, doc.y).lineTo(216, doc.y).dash(2, { space: 2 }).stroke().undash();
     doc.moveDown(0.5);
@@ -66,7 +61,7 @@ export const generateReceiptPDF = async (sale, settings = {}) => {
     doc.text('QTY', 95, headerY, { width: 30, align: 'center' });
     doc.text('REM', 130, headerY, { width: 30, align: 'center' });
     doc.text('PRICE', 165, headerY, { width: 51, align: 'right' });
-    
+
     doc.moveDown(0.2);
     doc.moveTo(10, doc.y).lineTo(216, doc.y).stroke();
     doc.moveDown(0.3);
@@ -108,10 +103,10 @@ export const generateReceiptPDF = async (sale, settings = {}) => {
     doc.moveDown(1.5);
     const payMethod = (sale.paymentMethod || 'CASH').toUpperCase();
     doc.fontSize(7).font('Helvetica-Bold').text(`PAYMENT: ${payMethod}`, { align: 'center' });
-    
+
     doc.moveDown(1);
     doc.fontSize(7).font('Helvetica-Bold').text(`SERVED BY: ${sale.cashierName || 'ADMIN'}`, { align: 'center' });
-    
+
     doc.moveDown(1);
     doc.fontSize(8);
     doc.text('**** THANK YOU ****', { align: 'center' });
@@ -119,11 +114,11 @@ export const generateReceiptPDF = async (sale, settings = {}) => {
     doc.text('PLEASE KEEP THIS RECEIPT', { align: 'center' });
     doc.text('POWERED BY TREDUMO POS', { align: 'center' });
     doc.text('www.tredumo.com', { align: 'center' });
-    
+
     // --- Digital eStamp Watermark ---
     doc.save(); // Save state for rotation and opacity
-    
-    const stampX = 40; 
+
+    const stampX = 40;
     const stampY = doc.y + 10;
     const stampWidth = 140;
     const stampHeight = 50;
@@ -155,7 +150,7 @@ export const generateReceiptPDF = async (sale, settings = {}) => {
     doc.fontSize(7).font('Helvetica-Bold').text('eSTAMPED', stampX + 35, stampY + 6, { width: 100, align: 'center' });
     doc.fontSize(5).font('Helvetica').text(`Ref: ${sale.id.substring(0, 18)}...`, stampX + 35, stampY + 16, { width: 100, align: 'center' });
     doc.text(`${new Date(sale.createdAt).toISOString().split('T')[0]}`, stampX + 35, stampY + 24, { width: 100, align: 'center' });
-    
+
     doc.fontSize(5).font('Helvetica-Bold');
     doc.text('VERIFIED STATEMENT', stampX + 35, stampY + 34, { width: 100, align: 'center' });
     doc.text(settings.SUPPORT_PHONE || '+256 703 840 326', stampX + 35, stampY + 41, { width: 100, align: 'center' });

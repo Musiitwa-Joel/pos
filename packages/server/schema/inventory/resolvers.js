@@ -41,6 +41,65 @@ const recordAudit = async (db, userId, action, target, oldValue = null, newValue
   }
 };
 
+const calculateShiftTotals = async (db, shiftId) => {
+  try {
+    const [shiftRows] = await db.query("SELECT * FROM cashier_shifts WHERE id = ?", [shiftId]);
+    if (shiftRows.length === 0) return null;
+    const shift = shiftRows[0];
+
+    // 💰 CASH SALES: Strict Shift ID Match
+    const [salesRows] = await db.query(
+      "SELECT SUM(total) as total FROM sales WHERE shift_id = ? AND payment_method = 'cash'",
+      [shiftId]
+    );
+    const cashTotal = parseFloat(salesRows[0].total || 0);
+
+    // 🔄 TOTAL RETURNS: Strict Shift ID Match
+    const [returnsRows] = await db.query(
+      "SELECT SUM(amount) as total FROM sale_returns WHERE shift_id = ?",
+      [shiftId]
+    );
+    const refundsTotal = parseFloat(returnsRows[0].total || 0);
+
+    // 💳 DEBT RECOVERY: Strict Shift ID Match
+    const [recoveryRows] = await db.query(
+      `SELECT SUM(amount) as total FROM customer_payments 
+       WHERE shift_id = ? AND (payment_method = 'cash' OR payment_method = 'cash-transaction')`,
+      [shiftId]
+    );
+    const recoveryTotal = parseFloat(recoveryRows[0]?.total || 0);
+
+    // 📱 DIGITAL SALES: Strict Shift ID Match
+    const [digitalSalesRows] = await db.query(
+      `SELECT SUM(total) as total FROM sales 
+       WHERE shift_id = ? AND (payment_method = 'bank' OR payment_method = 'mobile_money')`,
+      [shiftId]
+    );
+    const digitalTotal = parseFloat(digitalSalesRows[0]?.total || 0);
+
+    // 💳 CREDIT ISSUED: Strict Shift ID Match
+    const [creditSalesRows] = await db.query(
+      "SELECT SUM(total) as total FROM sales WHERE shift_id = ? AND payment_method = 'credit'",
+      [shiftId]
+    );
+    const creditTotal = parseFloat(creditSalesRows[0]?.total || 0);
+
+    const expectedCash = parseFloat(shift.opening_cash || 0) + cashTotal + recoveryTotal - refundsTotal;
+
+    return {
+      cashTotal,
+      refundsTotal,
+      recoveryTotal,
+      digitalTotal,
+      creditTotal,
+      expectedCash
+    };
+  } catch (err) {
+    console.error('[calculateShiftTotals] Failed:', err);
+    return null;
+  }
+};
+
 export default {
   Supplier: {
     totalOrders: async (parent, __, { db }) => {
@@ -540,17 +599,44 @@ export default {
 
         sql += " ORDER BY start_time DESC";
         const [rows] = await db.query(sql, params);
-        return rows.map(r => ({
-          ...r,
-          cashierId: r.cashier_id,
-          shiftId: r.shift_id,
-          startTime: r.start_time?.toISOString(),
-          endTime: r.end_time?.toISOString(),
-          openingCash: parseFloat(r.opening_cash),
-          expectedCash: parseFloat(r.expected_cash || 0),
-          actualCash: parseFloat(r.actual_cash || 0),
-          variance: parseFloat(r.variance || 0)
+        const shifts = await Promise.all(rows.map(async r => {
+          let totals = {};
+          if (r.status === 'OPEN') {
+            const dynamicTotals = await calculateShiftTotals(db, r.id);
+            if (dynamicTotals) {
+              totals = {
+                expectedCash: dynamicTotals.expectedCash,
+                cashTotal: dynamicTotals.cashTotal,
+                digitalTotal: dynamicTotals.digitalTotal,
+                creditTotal: dynamicTotals.creditTotal,
+                recoveryTotal: dynamicTotals.recoveryTotal,
+                refundsTotal: dynamicTotals.refundsTotal
+              };
+            }
+          } else {
+            totals = {
+              expectedCash: parseFloat(r.expected_cash || 0),
+              cashTotal: parseFloat(r.cash_total || 0),
+              digitalTotal: parseFloat(r.digital_total || 0),
+              creditTotal: parseFloat(r.credit_total || 0),
+              recoveryTotal: parseFloat(r.recovery_total || 0),
+              refundsTotal: parseFloat(r.refunds_total || 0)
+            };
+          }
+
+          return {
+            ...r,
+            cashierId: r.cashier_id,
+            shiftId: r.shift_id,
+            startTime: r.start_time?.toISOString(),
+            endTime: r.end_time?.toISOString(),
+            openingCash: parseFloat(r.opening_cash),
+            actualCash: parseFloat(r.actual_cash || 0),
+            variance: parseFloat(r.variance || 0),
+            ...totals
+          };
         }));
+        return shifts;
       } catch (err) {
         console.error('cashierShifts resolver error:', err);
         return [];
@@ -558,58 +644,46 @@ export default {
     },
     activeShift: async (_, { cashierId }, { db }) => {
       try {
-        const [rows] = await db.query("SELECT * FROM cashier_shifts WHERE cashier_id = ? AND status = 'OPEN'", [cashierId]);
+        const [rows] = await db.query("SELECT * FROM cashier_shifts WHERE cashier_id = ? AND status = 'OPEN' ORDER BY start_time DESC LIMIT 1", [cashierId]);
+        if (rows.length === 0) return null;
+        const r = rows[0];
+        const totals = await calculateShiftTotals(db, r.id);
+        return {
+          ...r,
+          cashierId: r.cashier_id,
+          startTime: r.start_time?.toISOString(),
+          openingCash: parseFloat(r.opening_cash),
+          ...totals
+        };
+      } catch (err) { return null; }
+    },
+    lastClosedShift: async (_, { cashierId }, { db }) => {
+      try {
+        const [rows] = await db.query(
+          "SELECT * FROM cashier_shifts WHERE cashier_id = ? AND status = 'CLOSED' ORDER BY end_time DESC LIMIT 1",
+          [cashierId]
+        );
         if (rows.length === 0) return null;
         const r = rows[0];
         return {
           ...r,
           cashierId: r.cashier_id,
           startTime: r.start_time?.toISOString(),
-          openingCash: parseFloat(r.opening_cash)
+          endTime: r.end_time?.toISOString(),
+          openingCash: parseFloat(r.opening_cash),
+          actualCash: parseFloat(r.actual_cash || 0),
+          expectedCash: parseFloat(r.expected_cash || 0),
+          variance: parseFloat(r.variance || 0)
         };
       } catch (err) { return null; }
     },
     getShiftExpected: async (_, { id }, { db }) => {
-      // 🛡️ Pre-Flight: Institutional Registry Alignment (Self-Healing)
-      try {
-        await db.query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER cashier_id");
-        await db.query("ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER payment_method");
-        await db.query("ALTER TABLE sale_returns ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER authorized_by");
-      } catch (e) {
-        // Fallback for MySQL versions without ADD COLUMN IF NOT EXISTS
-        try { await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id"); } catch (ne) {}
-        try { await db.query("ALTER TABLE customer_payments ADD COLUMN shift_id VARCHAR(36) AFTER payment_method"); } catch (ne) {}
-        try { await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by"); } catch (ne) {}
-      }
-
       try {
         const [shiftRows] = await db.query("SELECT * FROM cashier_shifts WHERE id = ?", [id]);
         if (shiftRows.length === 0) throw new Error("Shift not found");
         const shift = shiftRows[0];
 
-        // 💰 TOTAL SALES: Strict Shift ID Match
-        const [salesRows] = await db.query(
-          "SELECT SUM(total) as total FROM sales WHERE shift_id = ? AND payment_method = 'cash'",
-          [id]
-        );
-        const salesTotal = parseFloat(salesRows[0].total || 0);
-
-        // 🔄 TOTAL RETURNS: Strict Shift ID Match
-        const [returnsRows] = await db.query(
-          "SELECT SUM(amount) as total FROM sale_returns WHERE shift_id = ?",
-          [id]
-        );
-        const returnsTotal = parseFloat(returnsRows[0].total || 0);
-
-        // 💳 DEBT RECOVERY: Strict Shift ID Match
-        const [recoveryRows] = await db.query(
-          `SELECT SUM(amount) as total FROM customer_payments 
-           WHERE shift_id = ? AND (payment_method = 'cash' OR payment_method = 'cash-transaction')`,
-          [id]
-        );
-        const recoveryTotal = parseFloat(recoveryRows[0]?.total || 0);
-
-        const expectedCash = parseFloat(shift.opening_cash) + salesTotal + recoveryTotal - returnsTotal;
+        const totals = await calculateShiftTotals(db, id);
 
         return {
           ...shift,
@@ -617,9 +691,7 @@ export default {
           cashierId: shift.cashier_id,
           startTime: shift.start_time?.toISOString(),
           openingCash: parseFloat(shift.opening_cash),
-          expectedCash,
-          recoveryTotal,
-          refundsTotal: returnsTotal
+          ...totals
         };
       } catch (err) {
         console.error('getShiftExpected error:', err);
@@ -812,16 +884,27 @@ export default {
           { table: 'audit_logs', index: 'idx_created', column: 'created_at' },
           { table: 'sale_returns', index: 'idx_created', column: 'created_at' },
           { table: 'cashier_shifts', index: 'idx_start', column: 'start_time' },
-          { table: 'expenses', index: 'idx_status', column: 'status' }
+          { table: 'expenses', index: 'idx_status', column: 'status', type: 'VARCHAR(20) DEFAULT "ACTIVE"', after: 'description' },
+          // New shift summary columns
+          { table: 'cashier_shifts', column: 'cash_total', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+          { table: 'cashier_shifts', column: 'digital_total', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+          { table: 'cashier_shifts', column: 'credit_total', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+          { table: 'cashier_shifts', column: 'recovery_total', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+          { table: 'cashier_shifts', column: 'refunds_total', type: 'DECIMAL(15,2) DEFAULT 0.00' },
+          { table: 'sale_returns', column: 'shift_id', type: 'VARCHAR(36)', after: 'authorized_by' },
+          { table: 'sale_items', column: 'remaining_stock', type: 'INT', after: 'unit_cost' }
         ];
 
         for (const m of migrations) {
           try {
-            // First ensure the column exists (for newer columns like 'status')
-            if (m.column === 'status' && m.table === 'expenses') {
-              try { 
-                await db.query(`ALTER TABLE ${m.table} ADD COLUMN ${m.column} VARCHAR(20) DEFAULT 'ACTIVE' AFTER description`); 
-              } catch (e) { /* exists */ }
+            // Generic column addition
+            if (m.column && m.type) {
+              try {
+                const query = m.after 
+                  ? `ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type} AFTER ${m.after}`
+                  : `ALTER TABLE ${m.table} ADD COLUMN ${m.column} ${m.type}`;
+                await db.query(query);
+              } catch (e) { /* Likely already exists */ }
             }
 
             if (m.index) {
@@ -928,11 +1011,11 @@ export default {
 
       // 🛡️ Forensic Audit: Stock Adjustment
       recordAudit(
-        db, 
-        user?.id, 
-        type === 'purchase' ? 'STOCK_INJECTION' : 'STOCK_ADJUSTMENT', 
-        product.name, 
-        `Qty: ${product.stock}`, 
+        db,
+        user?.id,
+        type === 'purchase' ? 'STOCK_INJECTION' : 'STOCK_ADJUSTMENT',
+        product.name,
+        `Qty: ${product.stock}`,
         `New Qty: ${newStock} | Reason: ${notes || 'NONE'}`
       );
 
@@ -998,11 +1081,11 @@ export default {
       // 🛡️ Forensic Audit: Supplier Update
       if (updates.balance !== undefined) {
         recordAudit(
-          db, 
-          user?.id, 
-          'SUPPLIER_BALANCE_CHANGE', 
-          oldSupplier.name, 
-          `UGX ${parseFloat(oldSupplier.balance).toLocaleString()}`, 
+          db,
+          user?.id,
+          'SUPPLIER_BALANCE_CHANGE',
+          oldSupplier.name,
+          `UGX ${parseFloat(oldSupplier.balance).toLocaleString()}`,
           `UGX ${parseFloat(updates.balance).toLocaleString()}`
         );
       } else {
@@ -1025,7 +1108,7 @@ export default {
     deleteSupplier: async (_, { id }, { db, user }) => {
       const [rows] = await db.query("SELECT name FROM suppliers WHERE id = ?", [id]);
       const name = rows[0]?.name || 'Unknown Vendor';
-      
+
       await db.query("DELETE FROM suppliers WHERE id = ?", [id]);
 
       // 🛡️ Forensic Audit: Supplier Deletion
@@ -1253,11 +1336,11 @@ export default {
       const [cusRows] = await db.query("SELECT name, balance FROM customers WHERE id = ?", [customerId]);
       const customer = cusRows[0];
       recordAudit(
-        db, 
-        user?.id, 
-        'CREDIT_REPAYMENT', 
-        customer.name, 
-        `UGX ${amount.toLocaleString()} RECEIVED`, 
+        db,
+        user?.id,
+        'CREDIT_REPAYMENT',
+        customer.name,
+        `UGX ${amount.toLocaleString()} RECEIVED`,
         `New Balance: UGX ${parseFloat(customer.balance).toLocaleString()}`
       );
 
@@ -1283,11 +1366,11 @@ export default {
       // 🛡️ Forensic Audit: Payment Reversal
       const [cusRows] = await db.query("SELECT name, balance FROM customers WHERE id = ?", [payment.customer_id]);
       recordAudit(
-        db, 
-        'SYSTEM_AUTOPILOT', 
-        'DEBT_PAYMENT_REVERSED', 
-        cusRows[0]?.name || 'Unknown', 
-        `UGX ${parseFloat(payment.amount).toLocaleString()} REMOVED`, 
+        db,
+        'SYSTEM_AUTOPILOT',
+        'DEBT_PAYMENT_REVERSED',
+        cusRows[0]?.name || 'Unknown',
+        `UGX ${parseFloat(payment.amount).toLocaleString()} REMOVED`,
         `Debt Reinstated | Current: UGX ${parseFloat(cusRows[0]?.balance).toLocaleString()}`
       );
 
@@ -1544,81 +1627,45 @@ export default {
       return { id, cashierId, startTime: new Date().toISOString(), openingCash, status: 'OPEN' };
     },
     closeShift: async (_, { id, actualCash }, { db }) => {
-      // 🛡️ Pre-Flight: Institutional Registry Alignment (Self-Healing)
+      // 🛡️ Schema Self-Healing for Shift Totals (Ensures columns exist before update)
       try {
-        await db.query("ALTER TABLE sales ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER cashier_id");
-        await db.query("ALTER TABLE customer_payments ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER payment_method");
-        await db.query("ALTER TABLE sale_returns ADD COLUMN IF NOT EXISTS shift_id VARCHAR(36) AFTER authorized_by");
+        await db.query(`ALTER TABLE cashier_shifts 
+          ADD COLUMN IF NOT EXISTS cash_total DECIMAL(15,2) DEFAULT 0.00,
+          ADD COLUMN IF NOT EXISTS digital_total DECIMAL(15,2) DEFAULT 0.00,
+          ADD COLUMN IF NOT EXISTS credit_total DECIMAL(15,2) DEFAULT 0.00,
+          ADD COLUMN IF NOT EXISTS recovery_total DECIMAL(15,2) DEFAULT 0.00,
+          ADD COLUMN IF NOT EXISTS refunds_total DECIMAL(15,2) DEFAULT 0.00`);
       } catch (e) {
-        // Fallback for MySQL versions where ADD COLUMN IF NOT EXISTS is not supported
-        try { await db.query("ALTER TABLE sales ADD COLUMN shift_id VARCHAR(36) AFTER cashier_id"); } catch (ne) {}
-        try { await db.query("ALTER TABLE customer_payments ADD COLUMN shift_id VARCHAR(36) AFTER payment_method"); } catch (ne) {}
-        try { await db.query("ALTER TABLE sale_returns ADD COLUMN shift_id VARCHAR(36) AFTER authorized_by"); } catch (ne) {}
+        // Fallback for MySQL versions that don't support ADD COLUMN IF NOT EXISTS
+        try { await db.query("ALTER TABLE cashier_shifts ADD COLUMN cash_total DECIMAL(15,2) DEFAULT 0.00"); } catch (e) {}
+        try { await db.query("ALTER TABLE cashier_shifts ADD COLUMN digital_total DECIMAL(15,2) DEFAULT 0.00"); } catch (e) {}
+        try { await db.query("ALTER TABLE cashier_shifts ADD COLUMN credit_total DECIMAL(15,2) DEFAULT 0.00"); } catch (e) {}
+        try { await db.query("ALTER TABLE cashier_shifts ADD COLUMN recovery_total DECIMAL(15,2) DEFAULT 0.00"); } catch (e) {}
+        try { await db.query("ALTER TABLE cashier_shifts ADD COLUMN refunds_total DECIMAL(15,2) DEFAULT 0.00"); } catch (e) {}
       }
 
       const [shiftRows] = await db.query("SELECT * FROM cashier_shifts WHERE id = ?", [id]);
       if (shiftRows.length === 0) throw new Error("Shift not found");
       const shift = shiftRows[0];
 
-      // 💰 TOTAL SALES: Strict ID Match (No more time guessing)
-      const [salesRows] = await db.query(
-        "SELECT SUM(total) as total FROM sales WHERE shift_id = ? AND payment_method = 'cash'",
-        [id]
-      );
-      const salesTotal = parseFloat(salesRows[0].total || 0);
-
-      // 🔄 TOTAL RETURNS: Strict ID Match
-      const [returnsRows] = await db.query(
-        "SELECT SUM(amount) as total FROM sale_returns WHERE shift_id = ?",
-        [id]
-      );
-      const returnsTotal = parseFloat(returnsRows[0].total || 0);
-
-      // 💳 DEBT RECOVERY: Strict ID Match
-      const [recoveryRows] = await db.query(
-        `SELECT SUM(amount) as total FROM customer_payments 
-         WHERE shift_id = ? AND (payment_method = 'cash' OR payment_method = 'cash-transaction')`,
-        [id]
-      );
-      const recoveryTotal = parseFloat(recoveryRows[0]?.total || 0);
-
-      // 📱 DIGITAL SALES: Strict ID Match
-      const [digitalSalesRows] = await db.query(
-        `SELECT SUM(total) as total FROM sales 
-         WHERE shift_id = ? AND (payment_method = 'bank' OR payment_method = 'mobile_money')`,
-        [id]
-      );
-      const digitalTotal = parseFloat(digitalSalesRows[0]?.total || 0);
-
-      // 💳 CREDIT ISSUED: Strict ID Match
-      const [creditSalesRows] = await db.query(
-        "SELECT SUM(total) as total FROM sales WHERE shift_id = ? AND payment_method = 'credit'",
-        [id]
-      );
-      const creditTotal = parseFloat(creditSalesRows[0]?.total || 0);
-
-      // Final expected total calculation
-      const expectedCash = parseFloat(shift.opening_cash) + salesTotal + recoveryTotal - returnsTotal;
-      const variance = actualCash - expectedCash;
+      const totals = await calculateShiftTotals(db, id);
+      const variance = actualCash - totals.expectedCash;
 
       await db.query(
-        "UPDATE cashier_shifts SET end_time = NOW(), expected_cash = ?, actual_cash = ?, variance = ?, status = 'CLOSED' WHERE id = ?",
-        [expectedCash, actualCash, variance, id]
+        "UPDATE cashier_shifts SET end_time = CURRENT_TIMESTAMP, expected_cash = ?, actual_cash = ?, variance = ?, status = 'CLOSED', cash_total = ?, digital_total = ?, credit_total = ?, recovery_total = ?, refunds_total = ? WHERE id = ?",
+        [totals.expectedCash, actualCash, variance, totals.cashTotal, totals.digitalTotal, totals.creditTotal, totals.recoveryTotal, totals.refundsTotal, id]
       );
 
       return {
         ...shift,
-        id,
+        status: 'CLOSED',
         endTime: new Date().toISOString(),
-        expectedCash,
-        actualCash,
+        actualTotal: actualCash,
+        expectedTotal: totals.expectedCash,
         variance,
-        digitalTotal,
-        creditTotal,
-        recoveryTotal,
-        refundsTotal: returnsTotal,
-        status: 'CLOSED'
+        ...totals
       };
-    }
+    },
+
   }
-};
+}

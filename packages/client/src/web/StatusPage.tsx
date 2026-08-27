@@ -1,4 +1,5 @@
 import React from 'react';
+import { observer } from '@legendapp/state/react';
 import { motion } from 'motion/react';
 import { useQuery } from '@apollo/client';
 import { 
@@ -26,7 +27,7 @@ const ICON_MAP: Record<string, any> = {
   "Regional Node Sync": Network,
 };
 
-export default function StatusPage() {
+export default observer(function StatusPage() {
   const { data: compData, loading: compLoading } = useQuery(GET_STATUS_COMPONENTS);
   const { data: incData, loading: incLoading } = useQuery(GET_INCIDENT_HISTORY, {
     variables: { limit: 10 }
@@ -229,5 +230,5 @@ export default function StatusPage() {
       </div>
     </div>
   );
-}
+});
 

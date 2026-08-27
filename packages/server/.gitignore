@@ -6,6 +6,10 @@ out
 dist
 *.tgz
 
+# user uploaded files
+uploads/*
+!uploads/.gitkeep
+
 # code coverage
 coverage
 *.lcov

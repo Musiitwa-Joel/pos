@@ -1,26 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
+import { observer, useObservable } from '@legendapp/state/react';
 import Modal from '../Modal';
 import { Percent, Banknote, Delete, Check, X } from 'lucide-react';
 import { formatCurrency, cn } from '../../lib/utils';
 
 interface DiscountModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  subtotal: number;
-  currentDiscount: number;
+  ui$: any;
+  subtotal: any;
+  currentDiscount: any;
   onApply: (discount: number, reason: string) => void;
 }
 
-export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscount, onApply }: DiscountModalProps) {
-  const [unit, setUnit] = useState<'fixed' | 'percent'>('fixed');
-  const [inputValue, setInputValue] = useState('0');
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState<string | null>(null);
+export default observer(function DiscountModal({ ui$, subtotal: subtotal$, currentDiscount: currentDiscount$, onApply }: DiscountModalProps) {
+  const local$ = useObservable({
+    unit: 'fixed' as 'fixed' | 'percent',
+    inputValue: '0',
+    reason: '',
+    error: null as string | null
+  });
+
+  const isOpen = ui$.isDiscountModalOpen.get();
+  const subtotal = subtotal$.get();
+  const currentDiscount = currentDiscount$.get();
 
   useEffect(() => {
     if (isOpen) {
-      setInputValue(currentDiscount > 0 ? currentDiscount.toString() : '0');
-      setUnit('fixed');
+      local$.inputValue.set(currentDiscount > 0 ? currentDiscount.toString() : '0');
+      local$.unit.set('fixed');
     }
   }, [isOpen, currentDiscount]);
 
@@ -37,32 +43,29 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
       } else if (e.key === 'Enter') {
         handleSubmit();
       } else if (e.key === 'Escape') {
-        onClose();
+        ui$.isDiscountModalOpen.set(false);
       }
     };
 
-    const g = globalThis as any;
-    g.window?.addEventListener('keydown', handleKeyDown);
-    return () => g.window?.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, inputValue, unit]); // Dependencies to ensure handlers use fresh state
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen]);
 
   const handleNumberClick = (num: string) => {
-    setInputValue(prev => {
-      if (prev === '0') return num;
-      return prev + num;
-    });
+    const prev = local$.inputValue.peek();
+    if (prev === '0') local$.inputValue.set(num);
+    else local$.inputValue.set(prev + num);
   };
 
   const handleBackspace = () => {
-    setInputValue(prev => {
-      if (prev.length <= 1) return '0';
-      return prev.slice(0, -1);
-    });
+    const prev = local$.inputValue.peek();
+    if (prev.length <= 1) local$.inputValue.set('0');
+    else local$.inputValue.set(prev.slice(0, -1));
   };
 
-  const numericValue = parseFloat(inputValue) || 0;
+  const numericValue = parseFloat(local$.inputValue.get()) || 0;
   
-  const effectiveDiscount = unit === 'percent' 
+  const effectiveDiscount = local$.unit.get() === 'percent' 
     ? (subtotal * numericValue) / 100 
     : numericValue;
 
@@ -72,33 +75,33 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
 
   const handleSubmit = () => {
     if (isOverLimit) return;
-    if (!reason.trim()) {
-      setError('JUSTIFICATION_REQUIRED: ENTER_REASON_FOR_OVERRIDE');
+    if (!local$.reason.get().trim()) {
+      local$.error.set('JUSTIFICATION_REQUIRED: ENTER_REASON_FOR_OVERRIDE');
       return;
     }
-    onApply(effectiveDiscount, reason);
-    onClose();
+    onApply(effectiveDiscount, local$.reason.get());
+    ui$.isDiscountModalOpen.set(false);
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="PRICE_OVERRIDE_TERMINAL" maxWidth="max-w-md">
+    <Modal isOpen={isOpen} onClose={() => ui$.isDiscountModalOpen.set(false)} title="PRICE_OVERRIDE_TERMINAL" maxWidth="max-w-md">
       <div className="flex flex-col gap-6">
         {/* Toggle Unit */}
         <div className="flex bg-brand-dark p-1 border border-brand-steel rounded-lg">
           <button 
-            onClick={() => setUnit('fixed')}
+            onClick={() => local$.unit.set('fixed')}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 py-3 rounded-md transition-all font-display text-[10px] tracking-widest",
-              unit === 'fixed' ? "bg-brand-accent text-white shadow-lg" : "text-slate-900 dark:text-slate-500 hover:text-slate-300"
+              local$.unit.get() === 'fixed' ? "bg-brand-accent text-white shadow-lg" : "text-slate-900 dark:text-slate-500 hover:text-slate-300"
             )}
           >
             <Banknote size={14} /> FIXED_USH
           </button>
           <button 
-            onClick={() => setUnit('percent')}
+            onClick={() => local$.unit.set('percent')}
             className={cn(
               "flex-1 flex items-center justify-center gap-2 py-3 rounded-md transition-all font-display text-[10px] tracking-widest",
-              unit === 'percent' ? "bg-brand-accent text-white shadow-lg" : "text-slate-900 dark:text-slate-500 hover:text-slate-300"
+              local$.unit.get() === 'percent' ? "bg-brand-accent text-white shadow-lg" : "text-slate-900 dark:text-slate-500 hover:text-slate-300"
             )}
           >
             <Percent size={14} /> PERCENTAGE_%
@@ -109,7 +112,7 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
         <div className="industrial-panel p-6 bg-brand-dark/50 border-brand-accent/30 text-center group cursor-default">
            <div className="text-[9px] text-slate-900 dark:text-slate-500 font-display mb-2 uppercase tracking-widest">ENTER_DISCOUNT_VALUE</div>
            <div className="text-4xl font-mono font-bold text-brand-accent select-none">
-              {unit === 'percent' ? `${inputValue}%` : formatCurrency(numericValue)}
+              {local$.unit.get() === 'percent' ? `${local$.inputValue.get()}%` : formatCurrency(numericValue)}
            </div>
         </div>
 
@@ -134,24 +137,24 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
             type="text" 
             className={cn(
               "terminal-input w-full p-3 text-[10px]",
-              error?.includes('JUSTIFICATION') && "border-danger bg-danger/5"
+              local$.error.get()?.includes('JUSTIFICATION') && "border-danger bg-danger/5"
             )}
             placeholder="E.G. CUSTOMER_LOYALTY, DAMAGED_PACKAGING..."
-            value={reason}
+            value={local$.reason.get()}
             onChange={(e) => {
-              setReason(e.target.value);
-              setError(null);
+              local$.reason.set(e.target.value);
+              local$.error.set(null);
             }}
           />
         </div>
 
-        {(isOverLimit || error) && (
+        {(isOverLimit || local$.error.get()) && (
           <div className="p-3 bg-danger/10 border border-danger/30 text-danger text-[9px] font-mono animate-pulse uppercase leading-relaxed">
             {isOverLimit 
-               ? (unit === 'percent' 
+               ? (local$.unit.get() === 'percent' 
                    ? `OVERRIDE_REFUSED: MAXIMUM_AUTHORIZED_REDUCTION_IS_15%_(${formatCurrency(maxDiscount)})`
                    : `OVERRIDE_REFUSED: MAXIMUM_FIXED_REDUCTION_EXCEEDED. LIMIT: ${formatCurrency(maxDiscount)} (15% OF TOTAL)`)
-               : error
+               : local$.error.get()
             }
           </div>
         )}
@@ -173,7 +176,7 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
         </div>
 
         <button 
-          onClick={onClose}
+          onClick={() => ui$.isDiscountModalOpen.set(false)}
           className="w-full py-4 text-[10px] font-display uppercase tracking-[0.2em] text-slate-900 dark:text-slate-500 hover:text-slate-300 transition-colors"
         >
           CANCEL_&_CLOSE
@@ -181,4 +184,4 @@ export default function DiscountModal({ isOpen, onClose, subtotal, currentDiscou
       </div>
     </Modal>
   );
-}
+});

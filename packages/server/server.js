@@ -93,7 +93,7 @@ app.use(pinoHttp({ logger }));
 // Static Asset Anchoring (Institutional Blueprint)
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 app.use(express.static(path.join(__dirname, "public")));
-app.use("/uploads", cors(), express.static(path.join(__dirname, "uploads")));
+app.use("/uploads", cors(), express.static(path.join(__dirname, "public/uploads")));
 app.use("/backups", cors(), express.static(path.join(__dirname, "backups")));
 
 // CORS Whitelisting logic

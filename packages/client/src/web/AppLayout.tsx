@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Outlet, Link, useNavigate } from 'react-router-dom';
 import { Zap, Menu, X, Globe, Star, CheckCircle2, ArrowRight, Eye, EyeOff, Facebook, Instagram, Twitter } from 'lucide-react';
 import wordLogo from '../../assets/SVG/wordlogo.svg';
@@ -11,8 +11,12 @@ import { toast } from 'sonner';
 import { useGoogleLogin } from '@react-oauth/google';
 import AuthModal from '../components/auth/AuthModal';
 
-export default function AppLayout() {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function AppLayout() {
+  const isMenuOpen = webState$.ui.isMenuOpen.get();
+  const setIsMenuOpen = (val: boolean) => webState$.ui.isMenuOpen.set(val);
   const { openAuth } = useAuth();
   const currentYear = new Date().getFullYear();
 
@@ -116,20 +120,20 @@ export default function AppLayout() {
                 <div className="flex gap-4 md:gap-6">
                   {[
                     { name: "Facebook", icon: Facebook, href: "https://facebook.com/tredpos" },
-                    { 
-                      name: "X", 
+                    {
+                      name: "X",
                       icon: (props: any) => (
                         <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
                           <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.638 7.584H.474l8.6-9.83L0 1.154h7.594l5.243 6.932L18.901 1.153zM17.61 20.644h2.039L6.486 3.24H4.298L17.61 20.644z" />
                         </svg>
-                      ), 
-                      href: "https://x.com/tredpos" 
+                      ),
+                      href: "https://x.com/tredpos"
                     },
                     { name: "Instagram", icon: Instagram, href: "https://instagram.com/tredpos" }
                   ].map(social => (
-                    <a 
-                      key={social.name} 
-                      href={social.href} 
+                    <a
+                      key={social.name}
+                      href={social.href}
                       target="_blank"
                       rel="noopener noreferrer"
                       aria-label={social.name}
@@ -185,4 +189,4 @@ export default function AppLayout() {
       </div>
     </div>
   );
-}
+});

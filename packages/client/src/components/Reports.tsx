@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { observer } from "@legendapp/state/react";
 import {
   BarChart3,
   TrendingUp,
@@ -201,7 +202,8 @@ const REPORTS_METADATA: ReportMetadata[] = [
   },
 ];
 
-export default function Reports() {
+export default observer(function Reports() {
+  const hardware = useHardware();
   const {
     products,
     sales,
@@ -223,7 +225,7 @@ export default function Reports() {
     promotions,
     isOffline,
     settings,
-  } = useHardware();
+  } = hardware;
   const [selectedReport, setSelectedReport] = useState<ReportType | null>(null);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [cashierShifts, setCashierShifts] = useState<any[]>([]);
@@ -596,31 +598,7 @@ export default function Reports() {
         totalValue = cashFlow.netCash;
         break;
       case "DAILY_CASHIER":
-        dataForPrint = cashierShifts.map((s) => {
-          const shiftSales = (sales || []).filter((sale) => {
-            const saleTime = new Date(sale.createdAt).getTime();
-            const shiftStart = new Date(s.startTime).getTime();
-            const shiftEnd = s.endTime
-              ? new Date(s.endTime).getTime()
-              : Date.now();
-            return (
-              (sale.cashierId === s.cashierId ||
-                (sale.cashierName && sale.cashierName.includes(s.cashierId))) &&
-              saleTime >= shiftStart &&
-              saleTime <= shiftEnd
-            );
-          });
-          const calculatedSalesTotal = shiftSales.reduce(
-            (acc, sale) => acc + (sale.total || 0),
-            0,
-          );
-          const expectedCash = (s.openingCash || 0) + calculatedSalesTotal;
-          return {
-            ...s,
-            expectedCash,
-            variance: s.status === "CLOSED" ? s.actualCash - expectedCash : 0,
-          };
-        });
+        dataForPrint = calculatedShifts;
         totalValue = cashierStats.totalVariance;
         break;
       case "PROFIT_MARGIN":
@@ -798,7 +776,7 @@ export default function Reports() {
           (acc, i) =>
             acc +
             Number(i.unitPrice || (i as any).price || 0) *
-              Number(i.quantity || 0),
+            Number(i.quantity || 0),
           0,
         ) ||
         1;
@@ -1057,12 +1035,18 @@ export default function Reports() {
         0,
       );
 
-      const expectedTotal =
-        (s.openingCash || 0) + cashTotal + recoveryTotal - refundsTotal;
+      const expectedTotal = s.expectedCash !== undefined && s.expectedCash !== null
+        ? s.expectedCash
+        : (s.openingCash || 0) + cashTotal + recoveryTotal - refundsTotal;
 
       totalExpected += expectedTotal;
+      const actualTotal = s.actualCash || 0;
+      const variance = s.status === 'CLOSED' && s.variance !== undefined
+        ? s.variance
+        : actualTotal - expectedTotal;
+
       if (s.status === "CLOSED") {
-        totalClosedVariance += (s.actualCash || 0) - expectedTotal;
+        totalClosedVariance += variance;
       }
 
       const nameFromSales = shiftSales.find(
@@ -1077,14 +1061,14 @@ export default function Reports() {
       return {
         ...s,
         cashierName,
-        cashTotal,
-        creditTotal: creditSalesTotal,
-        digitalTotal: digitalSalesTotal,
-        recoveryTotal,
-        refundsTotal,
+        cashTotal: s.cashTotal !== undefined && s.cashTotal !== null ? s.cashTotal : cashTotal,
+        creditTotal: s.creditTotal !== undefined && s.creditTotal !== null ? s.creditTotal : creditSalesTotal,
+        digitalTotal: s.digitalTotal !== undefined && s.digitalTotal !== null ? s.digitalTotal : digitalSalesTotal,
+        recoveryTotal: s.recoveryTotal !== undefined && s.recoveryTotal !== null ? s.recoveryTotal : recoveryTotal,
+        refundsTotal: s.refundsTotal !== undefined && s.refundsTotal !== null ? s.refundsTotal : refundsTotal,
         expectedTotal,
-        actualTotal: s.actualCash || 0,
-        variance: (s.actualCash || 0) - expectedTotal,
+        actualTotal,
+        variance,
         duration: s.endTime
           ? `${Math.round((new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 60000)}m`
           : "ACTIVE",
@@ -1419,25 +1403,25 @@ export default function Reports() {
               {!["SUPPLIER_PAYABLES", "PROMOTION_MANAGER"].includes(
                 selectedReport,
               ) && (
-                <button
-                  onClick={handleExportCSV}
-                  disabled={isOffline || isReportEmpty}
-                  className={cn(
-                    "btn-industrial btn-outline px-4 py-2 text-[9px] flex items-center gap-2 transition-all duration-300",
-                    (isOffline || isReportEmpty) &&
+                  <button
+                    onClick={handleExportCSV}
+                    disabled={isOffline || isReportEmpty}
+                    className={cn(
+                      "btn-industrial btn-outline px-4 py-2 text-[9px] flex items-center gap-2 transition-all duration-300",
+                      (isOffline || isReportEmpty) &&
                       "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none",
-                  )}
-                >
-                  <Download size={14} /> EXPORT_CSV
-                </button>
-              )}
+                    )}
+                  >
+                    <Download size={14} /> EXPORT_CSV
+                  </button>
+                )}
               <button
                 onClick={handlePrint}
                 disabled={isOffline || isReportEmpty}
                 className={cn(
                   "btn-industrial btn-primary px-4 py-2 text-[9px] flex items-center gap-2 transition-all duration-300",
                   (isOffline || isReportEmpty) &&
-                    "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none",
+                  "opacity-40 blur-[1.5px] grayscale cursor-not-allowed pointer-events-none",
                 )}
               >
                 <Printer size={14} /> PRINT_LOG
@@ -1558,21 +1542,21 @@ export default function Reports() {
             "DISCOUNT_REPORT",
             "PROMOTION_MANAGER",
           ].includes(selectedReport) && (
-            <div className="flex-1 industrial-panel flex flex-col items-center justify-center gap-4">
-              <BarChart3
-                size={64}
-                className="text-brand-steel animate-pulse opacity-20"
-              />
-              <div className="text-center">
-                <h3 className="text-xs font-display text-slate-800 dark:text-slate-400 uppercase tracking-[0.2em] mb-2">
-                  TELEMETRY_DATA_FORMATTING_IN_PROGRESS
-                </h3>
-                <p className="text-[9px] text-slate-900 dark:text-slate-500 font-mono italic">
-                  AGGR_LEDGER_SEQ :: {selectedReport}
-                </p>
+              <div className="flex-1 industrial-panel flex flex-col items-center justify-center gap-4">
+                <BarChart3
+                  size={64}
+                  className="text-brand-steel animate-pulse opacity-20"
+                />
+                <div className="text-center">
+                  <h3 className="text-xs font-display text-slate-800 dark:text-slate-400 uppercase tracking-[0.2em] mb-2">
+                    TELEMETRY_DATA_FORMATTING_IN_PROGRESS
+                  </h3>
+                  <p className="text-[9px] text-slate-900 dark:text-slate-500 font-mono italic">
+                    AGGR_LEDGER_SEQ :: {selectedReport}
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       </div>
     );
@@ -1627,7 +1611,7 @@ export default function Reports() {
               className={cn(
                 "industrial-panel p-4 md:p-6 flex flex-col gap-4 text-left group hover:border-brand-accent/50 transition-all hover:bg-brand-accent/5",
                 isOffline &&
-                  "opacity-80 dark:opacity-50 grayscale cursor-not-allowed",
+                "opacity-80 dark:opacity-50 grayscale cursor-not-allowed",
               )}
             >
               <div className="flex justify-between items-start">
@@ -1681,4 +1665,5 @@ export default function Reports() {
       </footer>
     </div>
   );
-}
+});
+

@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { HardwareProvider, useHardware } from './HardwareContext';
+import { HardwareProvider } from './HardwareContext';
 import { AuthProvider } from './AuthContext';
 import { POSProvider } from './POSContext';
+import { IdentityProvider, useIdentity } from './contexts/IdentityContext';
+import { InventoryProvider } from './contexts/InventoryContext';
+import { SalesProvider } from './contexts/SalesContext';
+import { FinanceProvider } from './contexts/FinanceContext';
+import { HRProvider } from './contexts/HRContext';
+import { SystemProvider } from './contexts/SystemContext';
+import { IntelligenceProvider } from './contexts/IntelligenceContext';
 const AppShell = React.lazy(() => import('./AppShell'));
 const AppLayout = React.lazy(() => import('./web/AppLayout'));
 const LandingPage = React.lazy(() => import('./web/LandingPage'));
@@ -26,6 +33,8 @@ import LogoLoader from './components/LogoLoader';
 import { HelmetProvider } from 'react-helmet-async';
 import TredPosSEO from './components/common/TredPosSEO';
 
+import { observer } from '@legendapp/state/react';
+
 function MainLayout() {
   return (
     <>
@@ -35,8 +44,48 @@ function MainLayout() {
   );
 }
 
-function MainContent() {
-  const { currentUser, loadingStatus } = useHardware();
+
+
+import { GoogleOAuthProvider } from '@react-oauth/google';
+
+export default function App() {
+  const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_CLIENT_ID) || "531837744865-9ggk92vnkmbpha1sibu3hulfosuk0j0r.apps.googleusercontent.com";
+
+  return (
+    <HelmetProvider>
+      <TredPosSEO />
+      <GoogleOAuthProvider clientId={googleClientId}>
+        <IdentityProvider>
+          <InventoryProvider>
+            <SalesProvider>
+              <FinanceProvider>
+                <HRProvider>
+                  <SystemProvider>
+                    <POSProvider>
+                      <HardwareProvider>
+                        <IntelligenceProvider>
+                          <AuthProvider>
+                            <BrowserRouter>
+                              <Toaster position="bottom-right" theme="dark" richColors />
+                              <MainContent />
+                            </BrowserRouter>
+                          </AuthProvider>
+                        </IntelligenceProvider>
+                      </HardwareProvider>
+                    </POSProvider>
+                  </SystemProvider>
+                </HRProvider>
+              </FinanceProvider>
+            </SalesProvider>
+          </InventoryProvider>
+        </IdentityProvider>
+      </GoogleOAuthProvider>
+    </HelmetProvider>
+  );
+}
+
+const MainContent = observer(() => {
+  const { currentUser, loadingStatus } = useIdentity();
 
   if (currentUser) {
     return (
@@ -76,32 +125,4 @@ function MainContent() {
       </Routes>
     </React.Suspense>
   );
-}
-
-import { GoogleOAuthProvider } from '@react-oauth/google';
-
-export default function App() {
-  const googleClientId = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GOOGLE_CLIENT_ID) || "531837744865-9ggk92vnkmbpha1sibu3hulfosuk0j0r.apps.googleusercontent.com";
-
-  React.useEffect(() => {
-    // console.log('IDENTITY_LOAD:', googleClientId);
-  }, [googleClientId]);
-
-  return (
-    <HelmetProvider>
-      <TredPosSEO />
-      <GoogleOAuthProvider clientId={googleClientId}>
-        <HardwareProvider>
-          <POSProvider>
-            <AuthProvider>
-              <BrowserRouter>
-                <Toaster position="bottom-right" theme="dark" richColors />
-                <MainContent />
-              </BrowserRouter>
-            </AuthProvider>
-          </POSProvider>
-        </HardwareProvider>
-      </GoogleOAuthProvider>
-    </HelmetProvider>
-  );
-}
+});

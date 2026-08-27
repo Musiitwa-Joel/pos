@@ -8,6 +8,7 @@ interface AuditTrailReportProps {
 
 const formatAction = (action: string) => {
   switch (action) {
+    case 'TRANSACTION_AUTHORIZED': return 'Transaction Authorized';
     case 'HIGH_VALUE_SALE_OR_DISCOUNT': return 'Flagged: High Value / Manual Discount';
     case 'MANUAL_DISCOUNT_APPLIED': return 'Manual Discount Applied';
     case 'PROMOTION_REDEEMED': return 'Promotion Redeemed';

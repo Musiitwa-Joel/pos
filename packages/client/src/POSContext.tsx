@@ -1,66 +1,96 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
-import { useHardware } from './HardwareContext';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import { observable, computed } from "@legendapp/state";
+import { useIdentity } from './contexts/IdentityContext';
 import { CartItem, PaymentMethod } from './types';
 
+// 🚀 [VANGUARD] Performance Engine:
+// Using Legend-State observables for zero-rendering state management.
+export const posState$ = observable({
+  cart: [] as CartItem[],
+  posDiscount: 0,
+  selectedCustomerId: '',
+  paymentMethod: 'cash' as PaymentMethod,
+  resumedHeldSaleId: null as string | null,
+
+  // 🛰️ [ATOMIC] Financial Intelligence:
+  // Using lazy-evaluated computed properties directly within the state proxy.
+  subtotal: computed(() => (posState$.cart.get() || []).reduce((acc: number, item: any) => acc + (item.quantity * (item.unitPrice || item.price || 0)), 0)),
+  promoDiscount: computed(() => (posState$.cart.get() || []).reduce((acc: number, item: any) => acc + (item.discount || 0), 0)),
+  total: computed(() => {
+    const sub = (posState$ as any).subtotal.get();
+    const promo = (posState$ as any).promoDiscount.get();
+    const manual = posState$.posDiscount.get();
+    return Math.max(0, sub - promo - manual);
+  })
+});
+
 interface POSContextType {
+  // We keep the interface similar for backward compatibility
   cart: CartItem[];
-  setCart: React.Dispatch<React.SetStateAction<CartItem[]>>;
+  setCart: (cart: CartItem[] | ((prev: CartItem[]) => CartItem[])) => void;
   posDiscount: number;
-  setPosDiscount: React.Dispatch<React.SetStateAction<number>>;
+  setPosDiscount: (discount: number) => void;
   selectedCustomerId: string;
-  setSelectedCustomerId: React.Dispatch<React.SetStateAction<string>>;
+  setSelectedCustomerId: (id: string) => void;
   paymentMethod: PaymentMethod;
-  setPaymentMethod: React.Dispatch<React.SetStateAction<PaymentMethod>>;
+  setPaymentMethod: (method: PaymentMethod) => void;
   resumedHeldSaleId: string | null;
-  setResumedHeldSaleId: React.Dispatch<React.SetStateAction<string | null>>;
+  setResumedHeldSaleId: (id: string | null) => void;
   clearPOS: () => void;
+  posState$: any;
 }
+
+import { observer } from '@legendapp/state/react';
 
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
-export const POSProvider = ({ children }: { children: React.ReactNode }) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [posDiscount, setPosDiscount] = useState(0);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-  const [resumedHeldSaleId, setResumedHeldSaleId] = useState<string | null>(null);
+export const POSProvider = observer(({ children }: { children: React.ReactNode }) => {
+  const { currentUser } = useIdentity();
 
   const clearPOS = () => {
-    setCart([]);
-    setPosDiscount(0);
-    setSelectedCustomerId('');
-    setPaymentMethod('cash');
-    setResumedHeldSaleId(null);
+    posState$.assign({
+      cart: [],
+      posDiscount: 0,
+      selectedCustomerId: '',
+      paymentMethod: 'cash',
+      resumedHeldSaleId: null,
+    });
   };
 
-  const { currentUser } = useHardware();
-
-  // 🛡️ [VANGUARD] Session Isolation Protocol:
-  // Automatically purge POS state whenever the institutional context shifts or session expires.
+  // Automatically purge POS state on session shift
   useEffect(() => {
     clearPOS();
   }, [currentUser?.id]);
 
-  const contextValue = useMemo(() => ({
-    cart,
-    setCart,
-    posDiscount,
-    setPosDiscount,
-    selectedCustomerId,
-    setSelectedCustomerId,
-    paymentMethod,
-    setPaymentMethod,
-    resumedHeldSaleId,
-    setResumedHeldSaleId,
+  const value: POSContextType = useMemo(() => ({
+    // 🛡️ Note: We use .get() for the context value to support existing hooks,
+    // but components can also import posState$ directly for fine-grained updates.
+    get cart() { return posState$.cart.get(); },
+    setCart: (val) => {
+      if (typeof val === 'function') {
+        posState$.cart.set(val(posState$.cart.get()));
+      } else {
+        posState$.cart.set(val);
+      }
+    },
+    get posDiscount() { return posState$.posDiscount.get(); },
+    setPosDiscount: (val) => posState$.posDiscount.set(val),
+    get selectedCustomerId() { return posState$.selectedCustomerId.get(); },
+    setSelectedCustomerId: (val) => posState$.selectedCustomerId.set(val),
+    get paymentMethod() { return posState$.paymentMethod.get(); },
+    setPaymentMethod: (val) => posState$.paymentMethod.set(val),
+    get resumedHeldSaleId() { return posState$.resumedHeldSaleId.get(); },
+    setResumedHeldSaleId: (val) => posState$.resumedHeldSaleId.set(val),
     clearPOS,
-  }), [cart, posDiscount, selectedCustomerId, paymentMethod, resumedHeldSaleId]);
+    posState$: posState$,
+  }), []);
 
   return (
-    <POSContext.Provider value={contextValue}>
+    <POSContext.Provider value={value}>
       {children}
     </POSContext.Provider>
   );
-};
+});
 
 export const usePOS = () => {
   const context = useContext(POSContext);

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery } from '@apollo/client';
 import { 
@@ -33,9 +33,14 @@ interface KnowledgeBaseProps {
   type: 'help' | 'api' | 'security';
 }
 
-export default function KnowledgeBase({ type }: KnowledgeBaseProps) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function KnowledgeBase({ type }: KnowledgeBaseProps) {
+  const searchTerm = webState$.ui.searchQuery.get();
+  const setSearchTerm = (val: string) => webState$.ui.searchQuery.set(val);
+  const activeCategoryId = webState$.ui.selectedArticle.get(); // Reusing slot
+  const setActiveCategoryId = (val: string | null) => webState$.ui.selectedArticle.set(val);
 
   const kbType = type.toUpperCase();
 
@@ -220,4 +225,4 @@ export default function KnowledgeBase({ type }: KnowledgeBaseProps) {
       </section>
     </div>
   );
-}
+});

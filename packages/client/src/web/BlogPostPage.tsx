@@ -1,4 +1,5 @@
 import React from 'react';
+import { observer } from '@legendapp/state/react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { motion } from 'motion/react';
@@ -14,7 +15,7 @@ import {
 } from 'lucide-react';
 import LogoLoader from '../components/LogoLoader';
 
-export default function BlogPostPage() {
+export default observer(function BlogPostPage() {
   const { slug } = useParams();
   const navigate = useNavigate();
 
@@ -141,4 +142,4 @@ export default function BlogPostPage() {
       </article>
     </div>
   );
-}
+});

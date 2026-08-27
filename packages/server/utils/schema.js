@@ -74,6 +74,7 @@ export const INVENTORY_SCHEMA_SQL = [
       quantity INT NOT NULL,
       unit_price DECIMAL(10,2) NOT NULL,
       unit_cost DECIMAL(10,2) NOT NULL,
+      remaining_stock INT,
       FOREIGN KEY (sale_id) REFERENCES sales(id),
       INDEX idx_sale (sale_id),
       INDEX idx_product (product_id)
@@ -149,11 +150,13 @@ export const INVENTORY_SCHEMA_SQL = [
         amount DECIMAL(15,2) NOT NULL,
         reason TEXT,
         authorized_by VARCHAR(36),
+        shift_id VARCHAR(36),
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (sale_id) REFERENCES sales(id),
         INDEX idx_sale (sale_id),
         INDEX idx_product (product_id),
-        INDEX idx_created (created_at)
+        INDEX idx_created (created_at),
+        INDEX idx_shift (shift_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `,
   `
@@ -167,6 +170,11 @@ export const INVENTORY_SCHEMA_SQL = [
         actual_cash DECIMAL(15,2),
         variance DECIMAL(15,2),
         status VARCHAR(20) DEFAULT 'OPEN',
+        cash_total DECIMAL(15,2) DEFAULT 0.00,
+        digital_total DECIMAL(15,2) DEFAULT 0.00,
+        credit_total DECIMAL(15,2) DEFAULT 0.00,
+        recovery_total DECIMAL(15,2) DEFAULT 0.00,
+        refunds_total DECIMAL(15,2) DEFAULT 0.00,
         INDEX idx_cashier (cashier_id),
         INDEX idx_status (status),
         INDEX idx_start (start_time)

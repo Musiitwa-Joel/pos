@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery } from '@apollo/client';
 import { useNavigate } from 'react-router-dom';
@@ -20,11 +20,16 @@ import {
 import { cn } from '../lib/utils';
 import LogoLoader from '../components/LogoLoader';
 
-export default function BlogPage() {
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function BlogPage() {
   const navigate = useNavigate();
   const { data, loading } = useQuery(GET_BLOG_POSTS);
-  const [activeCategory, setActiveCategory] = useState('All');
-  const [searchQuery, setSearchQuery] = useState('');
+  const activeCategory = webState$.ui.activeCategory.get();
+  const setActiveCategory = (val: string) => webState$.ui.activeCategory.set(val);
+  const searchQuery = webState$.ui.searchQuery.get();
+  const setSearchQuery = (val: string) => webState$.ui.searchQuery.set(val);
 
   const categories = ["All", "Architecture", "Engineering", "Strategy", "Security", "Institutional"];
 
@@ -174,4 +179,4 @@ export default function BlogPage() {
       </section>
     </div>
   );
-}
+});

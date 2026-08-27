@@ -21,11 +21,14 @@ import { useAuth } from '../AuthContext';
 import { useQuery } from '@apollo/client';
 import { GET_ABOUT_SECTIONS } from '../gql/website';
 
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-export default function AboutPage() {
+export default observer(function AboutPage() {
   const { openAuth } = useAuth();
 
   const { data: aboutData } = useQuery(GET_ABOUT_SECTIONS);
@@ -217,4 +220,4 @@ export default function AboutPage() {
       </section>
     </div>
   );
-}
+});

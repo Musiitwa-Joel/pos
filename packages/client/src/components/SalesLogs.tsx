@@ -27,7 +27,15 @@ export default function SalesLogs() {
 
   // Local filtering ensures ZERO flicker between global cache (7 days) and local view (Today)
   const filteredSales = sales.filter(sale => {
-    const saleDate = String(sale.createdAt || sale.timestamp || "").split('T')[0];
+    // 🛰️ [VANGUARD] Institutional Date Normalization:
+    // We must use LOCAL time for date comparison to ensure midnight transactions
+    // are correctly attributed to the local business day, not UTC.
+    const rawDate = sale.createdAt || sale.timestamp;
+    if (!rawDate) return false;
+
+    const d = new Date(rawDate);
+    const saleDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
     const isWithinRange = (!startDate || saleDate >= startDate) && (!endDate || saleDate <= endDate);
     
     if (debouncedSearch) {

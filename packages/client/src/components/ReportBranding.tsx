@@ -272,7 +272,7 @@ export const generateBrandedReport = (
       `}).join('') : `<tr><td colspan="7" style="text-align: center; padding: 40px; color: #999;">NO_SHIFT_RECORDS_FOR_THIS_PERIOD</td></tr>`;
       break;
 
-      case 'PROFIT_MARGIN':
+    case 'PROFIT_MARGIN':
       tableHeader = `
         <tr>
           <th>PRODUCT_NAME</th>
@@ -338,7 +338,7 @@ export const generateBrandedReport = (
         const product = context.products?.find((p: any) => p.id === txn.productId);
         const name = product ? product.name : 'UNKNOWN_ITEM';
         const isSupplierRef = txn.referenceId && txn.referenceId.length >= 8;
-        
+
         let supplierText = '';
         if (isSupplierRef) {
           const supplier = context.suppliers?.find((s: Supplier) => s.id === txn.referenceId);
@@ -361,7 +361,7 @@ export const generateBrandedReport = (
         </tr>
       `}).join('') : `<tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">NO_PROCUREMENT_RECORDS_IN_PERIOD</td></tr>`;
       break;
-    
+
     case 'SALES_BY_CATEGORY':
       tableHeader = `
         <tr>
@@ -414,10 +414,10 @@ export const generateBrandedReport = (
             <td>${cashier}</td>
             <td style="text-align: right;">${formatCurrency(sale.subtotal)}</td>
             <td>
-              ${sale.promoName ? 
-                `<span style="background: rgba(14, 165, 233, 0.1); color: #0ea5e9; padding: 2px 8px; border-radius: 10px; font-size: 8pt; border: 1px solid rgba(14, 165, 233, 0.2);">${sale.promoName}</span>` : 
-                `<span style="color: #666; font-style: italic;">MANUAL_OVERRIDE</span>`
-              }
+              ${sale.promoName ?
+            `<span style="background: rgba(14, 165, 233, 0.1); color: #0ea5e9; padding: 2px 8px; border-radius: 10px; font-size: 8pt; border: 1px solid rgba(14, 165, 233, 0.2);">${sale.promoName}</span>` :
+            `<span style="color: #666; font-style: italic;">MANUAL_OVERRIDE</span>`
+          }
             </td>
             <td style="text-align: right; color: ${discountPercent > 15 ? '#dc2626' : '#000'}; font-weight: bold;">
               -${formatCurrency(sale.discount)}
@@ -464,12 +464,12 @@ export const generateBrandedReport = (
 
   const isMonetary = !['AUDIT_TRAIL', 'PROMOTION_MANAGER'].includes(reportMetadata.id);
   const totalCount = data.length;
-  
-  const totalsLabel = reportMetadata.id === 'AUDIT_TRAIL' ? 'TOTAL_ENTRIES_LOGGED' : 
-                      reportMetadata.id === 'PROMOTION_MANAGER' ? 'ACTIVE_PROMOTION_COUNT' : 
-                      'REPORT_CUMULATIVE_VALUE';
 
-  const grandTotalValue = isMonetary 
+  const totalsLabel = reportMetadata.id === 'AUDIT_TRAIL' ? 'TOTAL_ENTRIES_LOGGED' :
+    reportMetadata.id === 'PROMOTION_MANAGER' ? 'ACTIVE_PROMOTION_COUNT' :
+      'REPORT_CUMULATIVE_VALUE';
+
+  const grandTotalValue = isMonetary
     ? (typeof context.totalValue === 'number' ? formatCurrency(context.totalValue) : 'N/A')
     : `${totalCount} RECORDS`;
 

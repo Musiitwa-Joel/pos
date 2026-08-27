@@ -1,5 +1,4 @@
-import React from 'react';
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useRef, useLayoutEffect } from 'react';
 import { motion, AnimatePresence, useScroll, useSpring } from 'motion/react';
 import Marquee from 'react-fast-marquee';
 import { gsap } from 'gsap';
@@ -39,9 +38,13 @@ if (typeof window !== 'undefined') {
   gsap.registerPlugin(ScrollTrigger);
 }
 
-export default function LandingPage() {
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function LandingPage() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [activeCategory, setActiveCategory] = useState('All');
+  const activeCategory = webState$.ui.activeCategory.get();
+  const setActiveCategory = (val: string) => webState$.ui.activeCategory.set(val);
   const { openAuth } = useAuth();
   const { scrollYProgress } = useScroll();
   const scaleX = useSpring(scrollYProgress, {
@@ -547,4 +550,4 @@ export default function LandingPage() {
       </div>
     </div>
   );
-}
+});

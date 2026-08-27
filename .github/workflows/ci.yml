@@ -1,0 +1,65 @@
+name: KIYINJI Automated CI Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  validate-and-build:
+    name: CI Build & Schema Validation
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: tredpos_registry
+        ports:
+          - 3306:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=5
+
+    steps:
+      - name: Checkout Code Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb', '**/package.json') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install Workspace Dependencies
+        run: bun install --frozen-lockfile || bun install
+
+      - name: Validate GraphQL & Database Schema
+        env:
+          DB_HOST: 127.0.0.1
+          DB_USER: root
+          DB_PASSWORD: ''
+          DB_NAME: tredpos_registry
+        run: bun validate_schema.js
+
+      - name: Client Type Check (TypeScript)
+        run: |
+          cd packages/client
+          npx tsc --noEmit
+
+      - name: Compile Tailwind CSS v4 Styles
+        run: |
+          cd packages/client
+          npx @tailwindcss/cli -i src/input.css -o src/index.css
+
+      - name: Build Frontend Application
+        run: |
+          cd packages/client
+          npx vite build

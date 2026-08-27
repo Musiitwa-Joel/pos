@@ -1,4 +1,5 @@
 import React from 'react';
+import { observer } from '@legendapp/state/react';
 import { motion, AnimatePresence } from 'motion/react';
 import TredPosSEO from '../components/common/TredPosSEO';
 import {
@@ -18,7 +19,7 @@ import { useQuery } from '@apollo/client';
 import Marquee from 'react-fast-marquee';
 import { GET_REVIEWS } from '../gql/website';
 
-export default function ReviewsPage() {
+export default observer(function ReviewsPage() {
   const { data: reviewRes } = useQuery(GET_REVIEWS);
   const registryReviews = reviewRes?.getReviews || [];
 
@@ -187,4 +188,4 @@ export default function ReviewsPage() {
       </div>
     </div>
   );
-}
+});

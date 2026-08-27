@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useQuery } from '@apollo/client';
 import { GET_PRESS_RELEASES } from '../gql/website';
@@ -13,10 +13,15 @@ import {
 import { cn } from '../lib/utils';
 import LogoLoader from '../components/LogoLoader';
 
-export default function PressPage() {
+import { observer } from '@legendapp/state/react';
+import { webState$ } from './webState';
+
+export default observer(function PressPage() {
   const { data, loading } = useQuery(GET_PRESS_RELEASES);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPress, setSelectedPress] = useState<any | null>(null);
+  const searchQuery = webState$.ui.searchQuery.get();
+  const setSearchQuery = (val: string) => webState$.ui.searchQuery.set(val);
+  const selectedPress = webState$.ui.selectedPress.get();
+  const setSelectedPress = (val: any) => webState$.ui.selectedPress.set(val);
 
   const pressItems = data?.getPressReleases || [];
 
@@ -222,4 +227,4 @@ export default function PressPage() {
       </AnimatePresence>
      </div>
   );
-}
+});

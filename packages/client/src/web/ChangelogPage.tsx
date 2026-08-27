@@ -1,4 +1,5 @@
 import React from 'react';
+import { observer } from '@legendapp/state/react';
 import { useQuery } from '@apollo/client';
 import { motion } from 'motion/react';
 import { Zap, Calendar, ArrowRight, Shield, Rocket, Bug, Layers, ChevronRight } from 'lucide-react';
@@ -26,7 +27,7 @@ const CategoryBadge = ({ category }: { category: string }) => {
   );
 };
 
-export default function ChangelogPage() {
+export default observer(function ChangelogPage() {
   const { data, loading, error } = useQuery(GET_CHANGELOGS, {
     fetchPolicy: 'network-only'
   });
@@ -175,4 +176,4 @@ export default function ChangelogPage() {
       </section>
     </div>
   );
-}
+});

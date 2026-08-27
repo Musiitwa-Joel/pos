@@ -23,7 +23,7 @@ async function migrateAll() {
       console.log(`\n-- Hardening Cluster: [${dbName}] --`);
       try {
         await masterConnection.query(`USE \`${dbName}\``);
-        
+
         // 1. Roles Table
         const [rolesItems] = await masterConnection.query("SHOW TABLES LIKE 'roles'");
         if (rolesItems.length > 0) {
@@ -40,14 +40,22 @@ async function migrateAll() {
         // 2. Users Table
         const [usersItems] = await masterConnection.query("SHOW TABLES LIKE 'users'");
         if (usersItems.length > 0) {
-          const [usersColumns] = await masterConnection.query("SHOW COLUMNS FROM users LIKE 'authorized_modules'");
-          if (usersColumns.length === 0) {
+          const [usersColumns] = await masterConnection.query("SHOW COLUMNS FROM users");
+          const columnNames = usersColumns.map(c => c.Field.toLowerCase());
+
+          if (!columnNames.includes('authorized_modules')) {
             console.log("   -> Patching 'users': Adding 'authorized_modules'...");
-            await masterConnection.query("ALTER TABLE users ADD COLUMN authorized_modules TEXT");
-            console.log("      [SUCCESS]");
-          } else {
-            console.log("   -> 'users' already hardened.");
+            await masterConnection.query("ALTER TABLE users ADD COLUMN authorized_modules TEXT AFTER role");
           }
+          if (!columnNames.includes('profile_picture')) {
+            console.log("   -> Patching 'users': Adding 'profile_picture'...");
+            await masterConnection.query("ALTER TABLE users ADD COLUMN profile_picture VARCHAR(255) AFTER authorized_modules");
+          }
+          if (!columnNames.includes('otp_secret')) {
+            console.log("   -> Patching 'users': Adding 'otp_secret'...");
+            await masterConnection.query("ALTER TABLE users ADD COLUMN otp_secret VARCHAR(255) AFTER password_hash");
+          }
+          console.log("   -> 'users' table check complete.");
         }
       } catch (dbErr) {
         console.error(`   !! Cluster [${dbName}] failed:`, dbErr.message);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { observer } from '@legendapp/state/react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   ShieldAlert, 
@@ -21,7 +22,7 @@ interface LegalPageProps {
   type: 'privacy' | 'terms' | 'cookies';
 }
 
-export default function LegalPage({ type }: LegalPageProps) {
+export default observer(function LegalPage({ type }: LegalPageProps) {
   const config = {
     privacy: {
       title: "PRIVACY POLICY",
@@ -165,4 +166,4 @@ export default function LegalPage({ type }: LegalPageProps) {
       </section>
     </div>
   );
-}
+});

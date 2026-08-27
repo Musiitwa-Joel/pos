@@ -137,7 +137,7 @@ export default function ReturnsProcessingModal({ initialSale, onClose, onSuccess
         </div>
 
         {/* Modal Body */}
-        <div className="flex-1 md:overflow-hidden overflow-y-auto flex flex-col bg-[var(--bg-main)] custom-scrollbar">
+        <div className="flex-1 overflow-y-auto flex flex-col bg-[var(--bg-main)] custom-scrollbar">
           {!sale ? (
             /* Search Form View */
             <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12">
@@ -194,7 +194,7 @@ export default function ReturnsProcessingModal({ initialSale, onClose, onSuccess
               </div>
 
               {/* Return Item List */}
-              <div className="md:flex-1 flex flex-col p-2 sm:p-4 md:overflow-hidden">
+              <div className="md:flex-1 flex flex-col p-2 sm:p-4 md:overflow-hidden min-h-[300px] shrink-0 md:shrink">
                 <div className="flex md:grid md:grid-cols-12 justify-between items-center gap-4 px-3 md:px-6 py-2.5 md:py-4 bg-brand-steel/10 border border-brand-steel border-b-0 rounded-t-xl md:rounded-t-2xl text-[6px] md:text-[10px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest font-bold overflow-x-hidden">
                   <div className="md:col-span-5 text-left shrink-0">ITEM_PARTICULARS</div>
                   <div className="md:col-span-1 text-center hidden md:block">QTY</div>
