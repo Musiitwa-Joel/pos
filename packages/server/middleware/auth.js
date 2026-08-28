@@ -101,7 +101,7 @@ const authenticateUser = async ({ req }) => {
       const [rows] = await targetPool.execute(
         `SELECT u.*, r.authorized_modules as role_modules 
          FROM users u 
-         LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
+         LEFT JOIN roles r ON LOWER(u.role) COLLATE utf8mb4_unicode_ci = LOWER(r.name) COLLATE utf8mb4_unicode_ci 
          WHERE u.id = ? LIMIT 1`,
         [decoded.id]
       );

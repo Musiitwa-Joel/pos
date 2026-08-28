@@ -83,10 +83,10 @@ export const POSCheckout = observer(({
 
   return (
     <div className={cn(
-      "w-full flex flex-col md:flex-none flex-1 min-h-0 gap-1 bg-[var(--bg-panel)] overflow-visible custom-scrollbar pb-6 lg:pb-0",
+      "w-full flex flex-col flex-1 h-full min-h-0 gap-1 bg-[var(--bg-panel)] overflow-hidden pb-6 lg:pb-0",
       ui$.checkoutTab.get() !== 'settle' && "hidden md:flex"
     )}>
-      <div className="industrial-panel flex flex-col min-h-0 h-full bg-[var(--bg-panel)] lg:bg-transparent overflow-visible">
+      <div className="industrial-panel flex flex-col min-h-0 h-full bg-[var(--bg-panel)] lg:bg-transparent overflow-hidden">
         <div className="industrial-panel-header shrink-0">
           <div className="flex items-center gap-2">
             <Receipt size={14} className="text-brand-accent" />

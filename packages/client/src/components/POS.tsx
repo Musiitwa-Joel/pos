@@ -340,7 +340,7 @@ export default observer(function POS({ onExit }: { onExit?: () => void }) {
 
         {/* COLUMN 3: CHECKOUT CONTROL */}
         <div className={cn(
-          "flex-none md:w-[280px] lg:w-[320px] xl:w-[380px] flex flex-col min-h-0 gap-1 transition-all",
+          "flex-none h-full md:w-[280px] lg:w-[320px] xl:w-[380px] flex flex-col min-h-0 gap-1 transition-all",
           (!ui$.isCartMobileOpen.get() || ui$.checkoutTab.get() !== 'settle') ? "hidden md:flex" : "flex",
           "industrial-mobile-drawer"
         )}>

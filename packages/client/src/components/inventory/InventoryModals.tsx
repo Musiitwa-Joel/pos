@@ -354,8 +354,21 @@ const UploadBufferModal = observer(({ ui$, onDownloadTemplate }: any) => {
     fd.append("file", file);
 
     try {
+      const token = localStorage.getItem('khms_token');
+      const userStr = localStorage.getItem('khms_user');
+      let tenantId = '';
+      try {
+        const userObj = userStr ? JSON.parse(userStr) : null;
+        tenantId = userObj?.tenantId || userObj?.dbName || '';
+      } catch (e) {}
+
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      if (tenantId) headers['x-tenant-id'] = tenantId;
+
       const response = await fetch(`${API_BASE_URL}/api/inventory/upload`, {
         method: "POST",
+        headers,
         body: fd,
       });
       const data = await response.json();

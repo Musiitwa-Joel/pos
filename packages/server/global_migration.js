@@ -35,6 +35,8 @@ async function migrateAll() {
           } else {
             console.log("   -> 'roles' already hardened.");
           }
+          console.log("   -> Standardizing 'roles' collation to utf8mb4_unicode_ci...");
+          await masterConnection.query("ALTER TABLE roles CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
         }
 
         // 2. Users Table
@@ -55,7 +57,16 @@ async function migrateAll() {
             console.log("   -> Patching 'users': Adding 'otp_secret'...");
             await masterConnection.query("ALTER TABLE users ADD COLUMN otp_secret VARCHAR(255) AFTER password_hash");
           }
+          console.log("   -> Standardizing 'users' collation to utf8mb4_unicode_ci...");
+          await masterConnection.query("ALTER TABLE users CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
           console.log("   -> 'users' table check complete.");
+        }
+
+        // 3. Employees Table Collation Standardizing
+        const [empItems] = await masterConnection.query("SHOW TABLES LIKE 'employees'");
+        if (empItems.length > 0) {
+          console.log("   -> Standardizing 'employees' collation to utf8mb4_unicode_ci...");
+          await masterConnection.query("ALTER TABLE employees CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
         }
       } catch (dbErr) {
         console.error(`   !! Cluster [${dbName}] failed:`, dbErr.message);

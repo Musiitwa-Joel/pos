@@ -93,8 +93,8 @@ export default {
                     er.authorized_modules as fallback_role_modules
                 FROM users u 
                 LEFT JOIN employees e ON u.employee_id = e.id 
-                LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
-                LEFT JOIN roles er ON LOWER(e.role) = LOWER(er.name)
+                LEFT JOIN roles r ON LOWER(u.role) COLLATE utf8mb4_unicode_ci = LOWER(r.name) COLLATE utf8mb4_unicode_ci 
+                LEFT JOIN roles er ON LOWER(e.role) COLLATE utf8mb4_unicode_ci = LOWER(er.name) COLLATE utf8mb4_unicode_ci
                 WHERE u.id = ?`, [user.id]).catch(async (err) => {
                     if (err.message.includes("profile_picture")) {
                         // Fallback: Fetch without the new column during transition
@@ -106,8 +106,8 @@ export default {
                                 er.authorized_modules as fallback_role_modules
                             FROM users u 
                             LEFT JOIN employees e ON u.employee_id = e.id 
-                            LEFT JOIN roles r ON LOWER(u.role) = LOWER(r.name) 
-                            LEFT JOIN roles er ON LOWER(e.role) = LOWER(er.name)
+                            LEFT JOIN roles r ON LOWER(u.role) COLLATE utf8mb4_unicode_ci = LOWER(r.name) COLLATE utf8mb4_unicode_ci 
+                            LEFT JOIN roles er ON LOWER(e.role) COLLATE utf8mb4_unicode_ci = LOWER(er.name) COLLATE utf8mb4_unicode_ci
                             WHERE u.id = ?`, [user.id]);
                     }
                     throw err;
@@ -258,8 +258,8 @@ export default {
                     er.authorized_modules as fallback_role_modules
                 FROM \`${targetDbName}\`.users u 
                 LEFT JOIN \`${targetDbName}\`.employees e ON u.employee_id = e.id 
-                LEFT JOIN \`${targetDbName}\`.roles r ON LOWER(u.role) = LOWER(r.name) 
-                LEFT JOIN \`${targetDbName}\`.roles er ON LOWER(e.role) = LOWER(er.name)
+                LEFT JOIN \`${targetDbName}\`.roles r ON LOWER(u.role) COLLATE utf8mb4_unicode_ci = LOWER(r.name) COLLATE utf8mb4_unicode_ci 
+                LEFT JOIN \`${targetDbName}\`.roles er ON LOWER(e.role) COLLATE utf8mb4_unicode_ci = LOWER(er.name) COLLATE utf8mb4_unicode_ci
                 WHERE u.username = ? OR u.id = ? OR u.email = ?
             `;
             const [userRows] = await targetPool.query(query, [username.toLowerCase(), username, username.toLowerCase()]);

@@ -30,7 +30,7 @@ export const provisionInstitution = async (tenantData, password) => {
         name VARCHAR(100) NOT NULL UNIQUE,
         description TEXT,
         authorized_modules TEXT
-      ) ENGINE=MyISAM`,
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
       `CREATE TABLE IF NOT EXISTS employees (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -42,7 +42,7 @@ export const provisionInstitution = async (tenantData, password) => {
         joined_date DATE NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-      ) ENGINE=MyISAM`,
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
       `CREATE TABLE IF NOT EXISTS users (
         id VARCHAR(50) PRIMARY KEY,
         name VARCHAR(255),
@@ -61,7 +61,7 @@ export const provisionInstitution = async (tenantData, password) => {
         INDEX idx_email (email),
         INDEX idx_employee (employee_id),
         FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE SET NULL
-      ) ENGINE=MyISAM`,
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
       `CREATE TABLE IF NOT EXISTS system_settings (
         setting_key VARCHAR(100) PRIMARY KEY,
         setting_value TEXT,

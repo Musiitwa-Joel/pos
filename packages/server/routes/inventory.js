@@ -1,22 +1,44 @@
 import express from 'express';
 import multer from 'multer';
 import * as xlsx from 'xlsx';
-import { db } from '../config/config.js';
+import { db, getTenantPool, PRIVATE_KEY } from '../config/config.js';
 import { v7 as uuidv7 } from 'uuid';
 import { INVENTORY_SCHEMA_SQL } from '../utils/schema.js';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
+import jwt from 'jsonwebtoken';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const uploadsDir = path.join(__dirname, '../uploads');
 
+// Guarantee uploads directory exists
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const router = express.Router();
 const upload = multer({ dest: uploadsDir });
 
-// Helper to sanitize header matching
+// Helper to sanitize header matching (strips UTF-8 BOM and whitespace)
 const findColumn = (headers, targets) => {
-  return headers.find(h => targets.some(t => h.toLowerCase().includes(t.toLowerCase())));
+  return headers.find(h => {
+    const cleanH = String(h || '').trim().replace(/^\ufeff/, '').toLowerCase();
+    return targets.some(t => cleanH.includes(t.toLowerCase()));
+  });
+};
+
+const resolvePool = (req) => {
+  let targetDb = req.headers['x-tenant-id'];
+  if (!targetDb && req.headers.authorization) {
+    try {
+      const token = String(req.headers.authorization).replace(/^Bearer\s+/i, '');
+      const decoded = jwt.verify(token, PRIVATE_KEY);
+      targetDb = decoded?.dbName || decoded?.tenantId;
+    } catch (e) {}
+  }
+  return targetDb ? getTenantPool(targetDb) : db;
 };
 
 const ensureTables = async (conn) => {
@@ -26,10 +48,12 @@ const ensureTables = async (conn) => {
 };
 
 router.post('/upload', upload.single('file'), async (req, res) => {
-  const conn = await db.getConnection();
+  const pool = resolvePool(req);
+  let conn;
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+    conn = await pool.getConnection();
     await ensureTables(conn);
 
     const workbook = xlsx.readFile(req.file.path);
@@ -37,7 +61,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const sheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(sheet);
 
-    if (data.length === 0) return res.status(400).json({ error: 'File is empty' });
+    if (!data || data.length === 0) return res.status(400).json({ error: 'File is empty' });
 
     const headers = Object.keys(data[0]);
     const colName = findColumn(headers, ['name', 'product', 'item']);
@@ -54,7 +78,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       });
     }
 
-    // Start Transaction for Atomicity: ALL or NOTHING
     await conn.beginTransaction();
 
     const results = {
@@ -115,14 +138,19 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     });
   } finally {
     if (conn) conn.release();
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      try { await fs.promises.unlink(req.file.path); } catch (e) {}
+    }
   }
 });
 
 router.post('/upload-suppliers', upload.single('file'), async (req, res) => {
-  const conn = await db.getConnection();
+  const pool = resolvePool(req);
+  let conn;
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
+    conn = await pool.getConnection();
     await ensureTables(conn);
 
     const workbook = xlsx.readFile(req.file.path);
@@ -130,7 +158,7 @@ router.post('/upload-suppliers', upload.single('file'), async (req, res) => {
     const sheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(sheet);
 
-    if (data.length === 0) return res.status(400).json({ error: 'File is empty' });
+    if (!data || data.length === 0) return res.status(400).json({ error: 'File is empty' });
 
     const headers = Object.keys(data[0]);
     const colName = findColumn(headers, ['name', 'business', 'supplier', 'vendor']);
@@ -181,6 +209,9 @@ router.post('/upload-suppliers', upload.single('file'), async (req, res) => {
     });
   } finally {
     if (conn) conn.release();
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      try { await fs.promises.unlink(req.file.path); } catch (e) {}
+    }
   }
 });
 

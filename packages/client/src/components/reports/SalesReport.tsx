@@ -144,12 +144,10 @@ export default React.memo(function SalesReport({ type, salesSummary, productStat
             onChange={(e) => onSearchChange(e.target.value)}
            />
         </div>
-        <div className="flex flex-col gap-2 hidden sm:flex">
-           <div className="industrial-alert industrial-alert-info py-1 px-2 border-none bg-brand-accent/5">
-              <div className="shrink-0 pt-0.5">
-                <BarChart3 size={10} />
-              </div>
-              <span className="leading-tight">RANKINGS_BY_PERIOD_ACTIVITY</span>
+        <div className="hidden sm:flex items-center">
+           <div className="flex items-center gap-1.5 py-1 px-2.5 border border-brand-accent/20 bg-brand-accent/5">
+             <BarChart3 size={12} className="text-brand-accent shrink-0" />
+             <span className="text-[9px] font-mono text-brand-accent uppercase tracking-wider whitespace-nowrap">RANKINGS_BY_PERIOD_ACTIVITY</span>
            </div>
         </div>
       </div>

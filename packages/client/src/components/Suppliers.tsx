@@ -401,7 +401,23 @@ export default function Suppliers() {
                     const fd = new FormData();
                     fd.append('file', file);
                     try {
-                      const response = await fetch(`${API_BASE_URL}/api/inventory/upload-suppliers`, { method: 'POST', body: fd });
+                      const token = localStorage.getItem('khms_token');
+                      const userStr = localStorage.getItem('khms_user');
+                      let tenantId = '';
+                      try {
+                        const userObj = userStr ? JSON.parse(userStr) : null;
+                        tenantId = userObj?.tenantId || userObj?.dbName || '';
+                      } catch (e) {}
+
+                      const headers: Record<string, string> = {};
+                      if (token) headers['Authorization'] = `Bearer ${token}`;
+                      if (tenantId) headers['x-tenant-id'] = tenantId;
+
+                      const response = await fetch(`${API_BASE_URL}/api/inventory/upload-suppliers`, { 
+                        method: 'POST', 
+                        headers,
+                        body: fd 
+                      });
                       const contentType = response.headers.get("content-type");
                       if (contentType && contentType.includes("application/json")) {
                         const data = await response.json();
