@@ -50,18 +50,20 @@ const HRContext = createContext<HRContextType | undefined>(undefined);
 export const HRProvider = observer(({ children }: { children: React.ReactNode }) => {
   const { withLoading } = useIdentity();
 
-  const fetchEmployees = useCallback(async () => {
+  const fetchEmployees = useCallback(async (silent?: boolean) => {
     try {
-      hrState$.empLoading.set(true);
-      const { data } = await client.query({
-        query: GET_EMPLOYEES,
-        fetchPolicy: 'network-only'
-      });
-      if (data?.employees) hrState$.employees.set(data.employees);
+      if (!silent) hrState$.empLoading.set(true);
+      const [empRes, attRes] = await Promise.all([
+        client.query({ query: GET_EMPLOYEES, fetchPolicy: 'network-only' }),
+        client.query({ query: GET_ATTENDANCE, fetchPolicy: 'network-only' })
+      ]);
+      if (empRes.data?.employees) hrState$.employees.set(empRes.data.employees);
+      const attLogs = attRes.data?.attendanceLogs || attRes.data?.attendance || [];
+      hrState$.attendance.set(attLogs);
     } catch (err) {
       console.error('Fetch employees error:', err);
     } finally {
-      hrState$.empLoading.set(false);
+      if (!silent) hrState$.empLoading.set(false);
     }
   }, []);
 
@@ -71,7 +73,8 @@ export const HRProvider = observer(({ children }: { children: React.ReactNode })
         query: GET_ATTENDANCE,
         fetchPolicy: 'network-only'
       });
-      if (data?.attendance) hrState$.attendance.set(data.attendance);
+      const records = data?.attendanceLogs || data?.attendance || [];
+      hrState$.attendance.set(records);
     } catch (err) {
       console.error('Fetch attendance error:', err);
     }
@@ -100,6 +103,7 @@ export const HRProvider = observer(({ children }: { children: React.ReactNode })
       }, true);
     } catch (err) {
       console.error('[addEmployee] Execution Failed:', err);
+      throw err;
     }
   };
 
@@ -114,6 +118,7 @@ export const HRProvider = observer(({ children }: { children: React.ReactNode })
       }, true);
     } catch (err) {
       console.error('[updateEmployee] Execution Failed:', err);
+      throw err;
     }
   };
 
@@ -128,6 +133,7 @@ export const HRProvider = observer(({ children }: { children: React.ReactNode })
       }, true);
     } catch (err) {
       console.error('[addRole] Execution Failed:', err);
+      throw err;
     }
   };
 
@@ -142,6 +148,7 @@ export const HRProvider = observer(({ children }: { children: React.ReactNode })
       }, true);
     } catch (err) {
       console.error('[updateRole] Execution Failed:', err);
+      throw err;
     }
   };
 
@@ -156,20 +163,28 @@ export const HRProvider = observer(({ children }: { children: React.ReactNode })
       }, true);
     } catch (err) {
       console.error('[deleteRole] Execution Failed:', err);
+      throw err;
     }
   };
 
-  const recordAttendance = async (record: Omit<AttendanceRecord, 'id' | 'date' | 'checkIn'>) => {
+  const recordAttendance = async (record: { employeeId: string; status?: string; checkIn?: string; checkOut?: string }) => {
     try {
       await withLoading('RECORDING_ATTENDANCE', async () => {
+        const now = new Date().toISOString();
         await client.mutate({
           mutation: RECORD_ATTENDANCE,
-          variables: { ...record }
+          variables: {
+            employeeId: record.employeeId,
+            checkIn: record.checkIn || now,
+            checkOut: record.checkOut || null,
+            status: record.status || 'present',
+          }
         });
         await fetchAttendance();
       }, true);
     } catch (err) {
       console.error('[recordAttendance] Execution Failed:', err);
+      throw err;
     }
   };
 

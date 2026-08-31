@@ -286,7 +286,7 @@ export default observer(function AppShell() {
                 {currentView === "expenses" && <div className="hidden lg:block h-full"><Expenses /></div>}
                 {currentView === "reports" && <Reports />}
                 {currentView === "returns" && <ReturnsManagement />}
-                {currentView === "hr" && (isHqCeo || currentUser?.role?.toUpperCase() === "ADMIN") && <HRModule />}
+                {currentView === "hr" && <HRModule />}
 
                 {/* HQ Views */}
                 {currentView === "billing" && <BillingHub />}
@@ -295,7 +295,7 @@ export default observer(function AppShell() {
                 {currentView === "global_reports" && <GlobalReports />}
                 {currentView === "audit" && <SystemAudit />}
 
-                {currentView === "settings" && (isHqCeo || currentUser?.role?.toUpperCase() === "ADMIN" ? (isHqCeo ? <InfrastructureHub /> : <SettingsView />) : null)}
+                {currentView === "settings" && (isHqCeo ? <InfrastructureHub /> : <SettingsView />)}
               </React.Suspense>
             </motion.div>
           </AnimatePresence>

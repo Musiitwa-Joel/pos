@@ -21,9 +21,14 @@ import {
   CheckSquare,
   RefreshCw,
   Loader2,
+  User,
+  Mail,
+  Phone,
+  Shield,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import Select from "./Select";
+import Modal from "./Modal";
 import { toast } from "sonner";
 import ConfirmDialog from "./ConfirmDialog";
 
@@ -166,12 +171,14 @@ export default function HRModule() {
     try {
       await recordAttendance({
         employeeId: attendanceEmployee.id,
+        checkIn: new Date().toISOString(),
         status: status as "present" | "absent" | "late" | "excused",
       });
+      toast.success(`Attendance marked: ${status.toUpperCase()} for ${attendanceEmployee.name}`);
       setIsAttendanceModalOpen(false);
       setAttendanceEmployee(null);
-    } catch (err) {
-      // toast already handled
+    } catch (err: any) {
+      toast.error(`Recording attendance failed: ${err.message}`);
     }
   };
 
@@ -786,344 +793,349 @@ export default function HRModule() {
             </div>
           )}
 
-          <AnimatePresence>
-            {isAddModalOpen && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-main)]/60 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="industrial-panel w-full max-w-md"
-                >
-                  <div className="industrial-panel-header">
-                    <h2 className="text-sm font-display">Staff Onboarding</h2>
-                    <button
-                      onClick={() => setIsAddModalOpen(false)}
-                      className="text-[var(--text-muted)] hover:text-[var(--text-main)]"
-                    >
-                      <XCircle size={20} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleAddEmployee} className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-display text-[var(--text-muted)] uppercase">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        className="terminal-input w-full"
-                        value={newEmployee.name}
-                        onChange={(e) =>
-                          setNewEmployee({
-                            ...newEmployee,
-                            name: e.target.value,
-                          })
-                        }
-                        placeholder="ENTER FULL NAME..."
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Select
-                          label="Assigned Role"
-                          options={roles.map((r) => r.name)}
-                          value={newEmployee.role}
-                          onChange={(val) =>
-                            setNewEmployee({ ...newEmployee, role: val })
-                          }
-                          placeholder="SELECT_ROLE..."
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
-                          Base Salary (UGX)
-                        </label>
-                        <input
-                          type="number"
-                          className="terminal-input w-full p-2.5 text-xs"
-                          value={newEmployee.salary}
-                          onChange={(e) =>
-                            setNewEmployee({
-                              ...newEmployee,
-                              salary: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-display text-[var(--text-muted)] uppercase">
-                        Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        className="terminal-input w-full"
-                        value={newEmployee.phone}
-                        onChange={(e) =>
-                          setNewEmployee({
-                            ...newEmployee,
-                            phone: e.target.value,
-                          })
-                        }
-                        placeholder="+256..."
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-display text-[var(--text-muted)] uppercase">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        className="terminal-input w-full"
-                        value={newEmployee.email}
-                        onChange={(e) =>
-                          setNewEmployee({
-                            ...newEmployee,
-                            email: e.target.value,
-                          })
-                        }
-                        placeholder="EMAIL@KIYINJI.COM..."
-                      />
-                    </div>
-                    <div className="pt-4 flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddModalOpen(false)}
-                        className="btn-industrial btn-outline flex-1"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className={cn(
-                          "btn-industrial btn-primary flex-1 flex items-center justify-center gap-2",
-                          isSubmitting &&
-                            "opacity-80 dark:opacity-50 cursor-wait",
-                        )}
-                      >
-                        {isSubmitting ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : null}
-                        {isSubmitting ? "PROCESSING..." : "Complete Onboarding"}
-                      </button>
-                    </div>
-                  </form>
-                </motion.div>
+          {/* Staff Onboarding Modal */}
+          <Modal
+            isOpen={isAddModalOpen}
+            onClose={() => setIsAddModalOpen(false)}
+            title={
+              <div className="flex items-center gap-2">
+                <UserPlus size={16} className="text-brand-accent shrink-0" />
+                <span className="text-sm font-display uppercase tracking-wider text-slate-100 font-bold">Staff Onboarding</span>
               </div>
-            )}
-
-            {/* Edit Employee Modal */}
-            {isEditModalOpen && editingEmployee && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-main)]/60 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="industrial-panel w-full max-w-md"
-                >
-                  <div className="industrial-panel-header border-brand-accent/30 bg-brand-accent/5">
-                    <h2 className="text-sm font-display text-brand-accent">
-                      Edit Staff Details
-                    </h2>
-                    <button
-                      onClick={() => setIsEditModalOpen(false)}
-                      className="text-[var(--text-muted)] hover:text-[var(--text-main)]"
-                    >
-                      <XCircle size={20} />
-                    </button>
-                  </div>
-                  <form onSubmit={handleEditEmployee} className="p-6 space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-display text-[var(--text-muted)] uppercase">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        className="terminal-input w-full"
-                        value={editingEmployee.name}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            name: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-1">
-                        <Select
-                          label="Staff Role"
-                          options={roles.map((r) => r.name)}
-                          value={editingEmployee.role}
-                          onChange={(val) =>
-                            setEditingEmployee({
-                              ...editingEmployee,
-                              role: val,
-                            })
-                          }
-                          placeholder="SELECT_ROLE..."
-                        />
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">
-                          Monthly Salary (UGX)
-                        </label>
-                        <input
-                          type="number"
-                          className="terminal-input w-full p-2.5 text-xs"
-                          value={editingEmployee.salary}
-                          onChange={(e) =>
-                            setEditingEmployee({
-                              ...editingEmployee,
-                              salary: Number(e.target.value),
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-display text-[var(--text-muted)] uppercase">
-                        Phone Number
-                      </label>
-                      <input
-                        type="tel"
-                        className="terminal-input w-full"
-                        value={editingEmployee.phone}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            phone: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[9px] font-display text-[var(--text-muted)] uppercase">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        className="terminal-input w-full"
-                        value={editingEmployee.email}
-                        onChange={(e) =>
-                          setEditingEmployee({
-                            ...editingEmployee,
-                            email: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="pt-4 flex gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setIsEditModalOpen(false)}
-                        className="btn-industrial btn-outline flex-1"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="submit"
-                        disabled={isSubmitting}
-                        className={cn(
-                          "btn-industrial btn-primary flex-1 flex items-center justify-center gap-2",
-                          isSubmitting &&
-                            "opacity-80 dark:opacity-50 cursor-wait",
-                        )}
-                      >
-                        {isSubmitting ? (
-                          <Loader2 size={14} className="animate-spin" />
-                        ) : null}
-                        {isSubmitting ? "UPDATING..." : "Update Records"}
-                      </button>
-                    </div>
-                  </form>
-                </motion.div>
+            }
+            maxWidth="max-w-xl"
+          >
+            <form onSubmit={handleAddEmployee} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                  <User size={14} className="text-brand-accent shrink-0" />
+                  Full Legal Name <span className="text-brand-accent">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                  value={newEmployee.name}
+                  onChange={(e) =>
+                    setNewEmployee({
+                      ...newEmployee,
+                      name: e.target.value,
+                    })
+                  }
+                  placeholder="ENTER FULL NAME..."
+                />
               </div>
-            )}
 
-            {/* Attendance Recording Modal */}
-            {isAttendanceModalOpen && attendanceEmployee && (
-              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--bg-main)]/60 backdrop-blur-sm">
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                  className="industrial-panel w-full max-w-sm"
-                >
-                  <div className="industrial-panel-header border-success/30 bg-success/5">
-                    <div className="flex flex-col">
-                      <h2 className="text-sm font-display text-success">
-                        Record Attendance
-                      </h2>
-                      <p className="text-[9px] font-mono text-[var(--text-muted)] uppercase">
-                        {attendanceEmployee.name}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setIsAttendanceModalOpen(false)}
-                      className="text-[var(--text-muted)] hover:text-[var(--text-main)]"
-                    >
-                      <XCircle size={20} />
-                    </button>
-                  </div>
-                  <div className="p-6 grid grid-cols-1 gap-3">
-                    <button
-                      onClick={() => handleRecordAttendance("present")}
-                      className="btn-industrial btn-outline border-success/30 hover:bg-success/10 flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <CheckCircle2 size={16} className="text-success" />
-                        <span className="font-display text-[10px] uppercase">
-                          Mark Present
-                        </span>
-                      </div>
-                      <span className="text-[8px] font-mono text-[var(--text-muted)] group-hover:text-success">
-                        ON TIME
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => handleRecordAttendance("late")}
-                      className="btn-industrial btn-outline border-warning/30 hover:bg-warning/10 flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <Clock size={16} className="text-warning" />
-                        <span className="font-display text-[10px] uppercase">
-                          Mark Late
-                        </span>
-                      </div>
-                      <span className="text-[8px] font-mono text-[var(--text-muted)] group-hover:text-warning">
-                        DELAYED
-                      </span>
-                    </button>
-                    <button
-                      onClick={() => handleRecordAttendance("absent")}
-                      className="btn-industrial btn-outline border-danger/30 hover:bg-danger/10 flex items-center justify-between group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <XCircle size={16} className="text-danger" />
-                        <span className="font-display text-[10px] uppercase">
-                          Mark Absent
-                        </span>
-                      </div>
-                      <span className="text-[8px] font-mono text-[var(--text-muted)] group-hover:text-danger">
-                        MISSED
-                      </span>
-                    </button>
-
-                    <div className="mt-4 pt-4 border-t border-brand-steel flex justify-center">
-                      <button
-                        onClick={() => setIsAttendanceModalOpen(false)}
-                        className="text-[9px] font-display text-[var(--text-muted)] uppercase hover:text-[var(--text-main)] transition-colors"
-                      >
-                        Close Window
-                      </button>
-                    </div>
-                  </div>
-                </motion.div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Select
+                    label="Assigned Role *"
+                    options={roles && roles.length > 0 ? roles.map((r) => r.name) : ["ADMIN", "MANAGER", "CASHIER", "STAFF"]}
+                    value={newEmployee.role}
+                    onChange={(val) =>
+                      setNewEmployee({ ...newEmployee, role: val })
+                    }
+                    placeholder="SELECT_ROLE..."
+                    className="text-slate-200"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                    <DollarSign size={14} className="text-brand-accent shrink-0" />
+                    Base Monthly Salary (UGX)
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                    value={newEmployee.salary || ""}
+                    onChange={(e) =>
+                      setNewEmployee({
+                        ...newEmployee,
+                        salary: Number(e.target.value),
+                      })
+                    }
+                    placeholder="500,000"
+                  />
+                </div>
               </div>
-            )}
-          </AnimatePresence>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                  <Phone size={14} className="text-brand-accent shrink-0" />
+                  Phone Number <span className="text-brand-accent">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                  value={newEmployee.phone}
+                  onChange={(e) =>
+                    setNewEmployee({
+                      ...newEmployee,
+                      phone: e.target.value,
+                    })
+                  }
+                  placeholder="+256 700 000000"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                  <Mail size={14} className="text-brand-accent shrink-0" />
+                  Email Address (System Login)
+                </label>
+                <input
+                  type="email"
+                  className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                  value={newEmployee.email}
+                  onChange={(e) =>
+                    setNewEmployee({
+                      ...newEmployee,
+                      email: e.target.value,
+                    })
+                  }
+                  placeholder="EMAIL@KIYINJI.COM..."
+                />
+                <p className="text-[10px] font-mono text-slate-400">
+                  System credentials and onboarding instructions will be provisioned for this account.
+                </p>
+              </div>
+
+              <div className="pt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="btn-industrial btn-outline flex-1 py-2.5 text-xs font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className={cn(
+                    "btn-industrial btn-primary flex-1 py-2.5 text-xs flex items-center justify-center gap-2 font-bold tracking-wider",
+                    isSubmitting && "opacity-80 dark:opacity-50 cursor-wait",
+                  )}
+                >
+                  {isSubmitting ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <UserPlus size={14} />
+                  )}
+                  {isSubmitting ? "PROCESSING..." : "COMPLETE ONBOARDING"}
+                </button>
+              </div>
+            </form>
+          </Modal>
+
+          {/* Edit Employee Modal */}
+          {editingEmployee && (
+            <Modal
+              isOpen={isEditModalOpen}
+              onClose={() => setIsEditModalOpen(false)}
+              title={
+                <div className="flex items-center gap-2">
+                  <Edit2 size={16} className="text-brand-accent shrink-0" />
+                  <span className="text-sm font-display uppercase tracking-wider text-slate-100 font-bold">Edit Staff Records</span>
+                </div>
+              }
+              maxWidth="max-w-xl"
+            >
+              <form onSubmit={handleEditEmployee} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                    <User size={14} className="text-brand-accent shrink-0" />
+                    Full Legal Name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                    value={editingEmployee.name}
+                    onChange={(e) =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        name: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Select
+                      label="Staff Role"
+                      options={roles && roles.length > 0 ? roles.map((r) => r.name) : ["ADMIN", "MANAGER", "CASHIER", "STAFF"]}
+                      value={editingEmployee.role}
+                      onChange={(val) =>
+                        setEditingEmployee({
+                          ...editingEmployee,
+                          role: val,
+                        })
+                      }
+                      placeholder="SELECT_ROLE..."
+                      className="text-slate-200"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                      <DollarSign size={14} className="text-brand-accent shrink-0" />
+                      Monthly Salary (UGX)
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                      value={editingEmployee.salary}
+                      onChange={(e) =>
+                        setEditingEmployee({
+                          ...editingEmployee,
+                          salary: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                    <Phone size={14} className="text-brand-accent shrink-0" />
+                    Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                    value={editingEmployee.phone}
+                    onChange={(e) =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        phone: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-display text-slate-200 uppercase tracking-wider flex items-center gap-1.5 font-semibold">
+                    <Mail size={14} className="text-brand-accent shrink-0" />
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    className="terminal-input w-full p-2.5 text-xs bg-black/40 border border-brand-steel/40 text-slate-100 placeholder:text-slate-500 focus:border-brand-accent rounded-sm"
+                    value={editingEmployee.email || ""}
+                    onChange={(e) =>
+                      setEditingEmployee({
+                        ...editingEmployee,
+                        email: e.target.value,
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="pt-3 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditModalOpen(false)}
+                    className="btn-industrial btn-outline flex-1 py-2.5 text-xs font-semibold"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting}
+                    className={cn(
+                      "btn-industrial btn-primary flex-1 py-2.5 text-xs flex items-center justify-center gap-2 font-bold tracking-wider",
+                      isSubmitting && "opacity-80 dark:opacity-50 cursor-wait",
+                    )}
+                  >
+                    {isSubmitting ? (
+                      <Loader2 size={14} className="animate-spin" />
+                    ) : (
+                      <CheckCircle2 size={14} />
+                    )}
+                    {isSubmitting ? "UPDATING..." : "UPDATE RECORDS"}
+                  </button>
+                </div>
+              </form>
+            </Modal>
+          )}
+
+          {/* Attendance Recording Modal */}
+          {attendanceEmployee && (
+            <Modal
+              isOpen={isAttendanceModalOpen}
+              onClose={() => setIsAttendanceModalOpen(false)}
+              title={
+                <div className="flex items-center gap-2">
+                  <Clock size={16} className="text-success shrink-0" />
+                  <div className="flex flex-col text-left">
+                    <span className="text-sm font-display uppercase tracking-wider text-slate-100 font-bold">Record Attendance</span>
+                    <span className="text-[10px] font-mono text-slate-400 uppercase">{attendanceEmployee.name}</span>
+                  </div>
+                </div>
+              }
+              maxWidth="max-w-md"
+            >
+              <div className="grid grid-cols-1 gap-3 py-2">
+                <button
+                  onClick={() => handleRecordAttendance("present")}
+                  className="btn-industrial btn-outline border-success/40 bg-success/5 hover:bg-success/15 p-3 flex items-center justify-between group transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <CheckCircle2 size={18} className="text-success" />
+                    <span className="font-display text-xs font-bold uppercase text-slate-100 group-hover:text-success">
+                      Mark Present
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-success font-bold uppercase bg-success/10 px-2 py-0.5 border border-success/30 rounded-xs">
+                    ON TIME
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => handleRecordAttendance("late")}
+                  className="btn-industrial btn-outline border-warning/40 bg-warning/5 hover:bg-warning/15 p-3 flex items-center justify-between group transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <Clock size={18} className="text-warning" />
+                    <span className="font-display text-xs font-bold uppercase text-slate-100 group-hover:text-warning">
+                      Mark Late
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-warning font-bold uppercase bg-warning/10 px-2 py-0.5 border border-warning/30 rounded-xs">
+                    DELAYED
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => handleRecordAttendance("absent")}
+                  className="btn-industrial btn-outline border-danger/40 bg-danger/5 hover:bg-danger/15 p-3 flex items-center justify-between group transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <XCircle size={18} className="text-danger" />
+                    <span className="font-display text-xs font-bold uppercase text-slate-100 group-hover:text-danger">
+                      Mark Absent
+                    </span>
+                  </div>
+                  <span className="text-[9px] font-mono text-danger font-bold uppercase bg-danger/10 px-2 py-0.5 border border-danger/30 rounded-xs">
+                    MISSED
+                  </span>
+                </button>
+
+                <div className="mt-4 pt-3 border-t border-brand-steel/30 flex justify-center">
+                  <button
+                    onClick={() => setIsAttendanceModalOpen(false)}
+                    className="text-xs font-display text-slate-400 uppercase hover:text-slate-200 transition-colors"
+                  >
+                    Close Window
+                  </button>
+                </div>
+              </div>
+            </Modal>
+          )}
         </div>
       </div>
       

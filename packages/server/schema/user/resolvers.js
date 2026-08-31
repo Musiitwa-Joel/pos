@@ -192,20 +192,20 @@ export default {
     },
     Mutation: {
         login: async (_, { username, password }) => {
-            const normalizedEmail = username.toLowerCase();
+            const cleanUsername = String(username || '').trim();
+            const normalizedEmail = cleanUsername.toLowerCase();
 
             // 🛡️ [HSM v2.4] Institutional Identity Discovery
             // Universal Lookup: Match by owner_email OR by operator_mappings
             const [tenantRows] = await registryPool.query(`
                 SELECT t.* FROM tenants t 
                 LEFT JOIN operator_mappings om ON t.id = om.tenant_id
-                WHERE t.owner_email = ? OR om.email = ? 
+                WHERE LOWER(t.owner_email) = ? OR LOWER(om.email) = ? 
                 LIMIT 1`,
                 [normalizedEmail, normalizedEmail]
             );
 
             let tenant = tenantRows[0] || null;
-
 
             // [TredPOS v2.4] Federated Identity Discovery
             if (!tenant) {
@@ -216,16 +216,22 @@ export default {
                     try {
                         const tPool = getTenantPool(t.db_name);
                         // Case-Insensitive Canonical Verification
-                        const [uRows] = await tPool.query("SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?", [normalizedEmail, normalizedEmail]);
+                        const [uRows] = await tPool.query(
+                            "SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ? OR id = ?",
+                            [normalizedEmail, normalizedEmail, cleanUsername]
+                        );
                         if (uRows.length > 0) {
                             console.log(`[TredPOS Discovery] Cluster Match: Found ${normalizedEmail} in ${t.db_name}. Auto-Mapping...`);
                             // Auto-Repair Registry mapping for persistence
-                            await registryPool.query("INSERT IGNORE INTO operator_mappings (tenant_id, email) VALUES (?, ?)", [t.id, normalizedEmail]);
+                            await registryPool.query(
+                                "INSERT INTO operator_mappings (tenant_id, email) VALUES (?, ?) ON DUPLICATE KEY UPDATE tenant_id = ?",
+                                [t.id, normalizedEmail, t.id]
+                            );
                             tenant = t;
                             break;
                         }
                     } catch (e) {
-                        // Log warning but continue scanning other clusters to prevent a single DB failure from blocking the user
+                        // Log warning but continue scanning other clusters
                         console.error(`[TredPOS Discovery] Cluster Scan Failed (${t.db_name}): ${e.message}`);
                     }
                 }
@@ -233,7 +239,10 @@ export default {
                 // If still no tenant and not HQ CEO in the system DB, reject.
                 if (!tenant) {
                     const sysPool = getTenantPool("tred_hardware");
-                    const [sysUserRows] = await sysPool.query("SELECT role FROM users WHERE username = ? OR email = ?", [username.toLowerCase(), username.toLowerCase()]);
+                    const [sysUserRows] = await sysPool.query(
+                        "SELECT role FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?",
+                        [normalizedEmail, normalizedEmail]
+                    );
                     if (!sysUserRows[0] || sysUserRows[0].role !== 'hq-ceo') {
                         throw new Error("ACCESS_DENIED: Critical identity mapping failure. Your account must be associated with a valid institutional cluster. Please contact Tred Industries HQ.");
                     }
@@ -260,9 +269,9 @@ export default {
                 LEFT JOIN \`${targetDbName}\`.employees e ON u.employee_id = e.id 
                 LEFT JOIN \`${targetDbName}\`.roles r ON LOWER(u.role) COLLATE utf8mb4_unicode_ci = LOWER(r.name) COLLATE utf8mb4_unicode_ci 
                 LEFT JOIN \`${targetDbName}\`.roles er ON LOWER(e.role) COLLATE utf8mb4_unicode_ci = LOWER(er.name) COLLATE utf8mb4_unicode_ci
-                WHERE u.username = ? OR u.id = ? OR u.email = ?
+                WHERE LOWER(u.username) = ? OR LOWER(u.email) = ? OR u.id = ?
             `;
-            const [userRows] = await targetPool.query(query, [username.toLowerCase(), username, username.toLowerCase()]);
+            const [userRows] = await targetPool.query(query, [normalizedEmail, normalizedEmail, cleanUsername]);
 
             if (userRows.length === 0) throw new Error("User identity not found in institutional database");
 
