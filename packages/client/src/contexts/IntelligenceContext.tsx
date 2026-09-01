@@ -46,7 +46,7 @@ export const IntelligenceProvider = observer(({ children }: { children: React.Re
     const expenses = hardware.financeState$.expenses.get() || [];
     const products = hardware.inventoryState$.products.get() || [];
     const customers = hardware.financeState$.customers.get() || [];
-    const suppliers = hardware.financeState$.suppliers.get() || [];
+    const suppliers = hardware.inventoryState$.suppliers.get() || [];
     const attendance = hardware.hrState$.attendance.get() || [];
 
     const todaySales = sales.filter(s => {
