@@ -173,6 +173,8 @@ export default observer(function POS({ onExit }: { onExit?: () => void }) {
           setResumedHeldSaleId(null);
         }, 5000);
       }
+    } catch (err: any) {
+      toast.error(err.message || "Transaction failed");
     } finally {
       ui$.isProcessing.set(false);
     }
