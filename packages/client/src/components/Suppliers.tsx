@@ -6,6 +6,7 @@ import { Supplier } from '../types';
 import Modal from './Modal';
 import { toast } from 'sonner';
 import { cn } from '../lib/utils';
+import Select from './Select';
 
 export default function Suppliers() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -17,7 +18,8 @@ export default function Suppliers() {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadResult, setUploadResult] = useState<{ success: number; errors: string[] } | null>(null);
-  const [poQuantities, setPoQuantities] = useState<Record<string, number>>({});
+  const [poProductId, setPoProductId] = useState('');
+  const [poQuantity, setPoQuantity] = useState('1');
   const [isPOProcessing, setIsPOProcessing] = useState(false);
   const [historyTransactions, setHistoryTransactions] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -27,6 +29,33 @@ export default function Suppliers() {
   const [isEditing, setIsEditing] = useState(false);
 
   const { suppliers, products, addSupplier, refreshSuppliers, adjustStock, updateSupplier, getInventoryTransactions, isOffline } = useHardware();
+  const audioContextRef = React.useRef<AudioContext | null>(null);
+
+  const playInvalidTone = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioCtx();
+    }
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') {
+      void ctx.resume();
+    }
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'square';
+    oscillator.frequency.value = 180;
+    gain.gain.value = 0.04;
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.12);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+  }, []);
 
   const supplierProducts = useMemo(
     () => products.filter(p => p.supplierId === selectedSupplier?.id),
@@ -34,11 +63,10 @@ export default function Suppliers() {
   );
 
   const estimatedTotal = useMemo(() => {
-    return Object.entries(poQuantities).reduce((sum, [id, qty]) => {
-      const product = products.find(p => p.id === id);
-      return sum + (product ? product.costPrice * qty : 0);
-    }, 0);
-  }, [poQuantities, products]);
+    const product = products.find(p => p.id === poProductId);
+    const qty = Math.max(0, parseInt(poQuantity) || 0);
+    return product ? product.costPrice * qty : 0;
+  }, [poProductId, poQuantity, products]);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -95,25 +123,23 @@ export default function Suppliers() {
   const handlePOSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSupplier) return;
-    const itemsToAdjust = Object.entries(poQuantities).filter(([_, qty]) => qty > 0);
-    if (itemsToAdjust.length === 0) return toast.error('PLEASE_ENTER_QUANTITIES_FOR_AT_LEAST_ONE_ITEM');
+    if (!poProductId) return toast.error('PLEASE_SELECT_ONE_PRODUCT');
+    const qty = parseInt(poQuantity);
+    if (isNaN(qty) || qty <= 0) return toast.error('PLEASE_ENTER_A_VALID_QUANTITY');
+    const product = products.find(p => p.id === poProductId);
+    if (!product) return toast.error('SELECTED_PRODUCT_NOT_FOUND');
 
     setIsPOProcessing(true);
     try {
-      let totalValue = 0;
-      for (const [id, qty] of itemsToAdjust) {
-        const product = products.find(p => p.id === id);
-        if (product) {
-          totalValue += product.costPrice * qty;
-          await adjustStock(id, qty, 'purchase', `PO: ${selectedSupplier.name}`);
-        }
-      }
+      const totalValue = product.costPrice * qty;
+      await adjustStock(poProductId, qty, 'purchase', `PO: ${selectedSupplier.name}`);
       const newBalance = selectedSupplier.balance + totalValue;
       await updateSupplier(selectedSupplier.id, { balance: newBalance });
       setSelectedSupplier(prev => prev ? { ...prev, balance: newBalance } : prev);
       toast.success('PURCHASE_ORDER_EXECUTED_SUCCESSFULLY');
       setIsPOModalOpen(false);
-      setPoQuantities({});
+      setPoProductId('');
+      setPoQuantity('1');
       await refreshSuppliers();
     } catch (err: any) {
       toast.error(`PO_EXECUTION_FAILED: ${err.message}`);
@@ -462,27 +488,46 @@ export default function Suppliers() {
             GENERATING_PO_FOR_VENDOR_ID: {selectedSupplier?.id.slice(0, 8)}...
           </div>
           <div className="space-y-4">
-            <div className="flex items-center justify-between text-[9px] font-display text-slate-900 dark:text-slate-500 border-b border-brand-steel pb-1">
-              <span>ITEM_DESCRIPTION</span>
-              <div className="flex gap-8"><span>QUANTITY</span><span>LINE_TOTAL</span></div>
+            <div className="space-y-2">
+              <Select
+                label="Item to restock"
+                value={poProductId}
+                onChange={setPoProductId}
+                placeholder="SELECT_PRODUCT..."
+                options={supplierProducts.map(p => ({
+                  value: p.id,
+                  label: `${p.name} // STK ${p.stock} // UGX ${p.costPrice.toLocaleString()}`
+                }))}
+              />
+              {supplierProducts.length === 0 && (
+                <div className="text-center py-8 opacity-40 text-[10px] font-display">NO_PRODUCTS_AVAILABLE_FOR_RESTOCK</div>
+              )}
             </div>
-            <div className="space-y-2 max-h-60 overflow-y-auto px-1">
-              {supplierProducts.map(p => (
-                <div key={p.id} className="flex items-center justify-between bg-brand-dark/30 p-2 border border-brand-steel/30 rounded">
-                  <div className="flex flex-col">
-                    <span className="text-xs text-black dark:text-[var(--text-main)] font-display">{p.name}</span>
-                    <span className="text-[8px] font-mono text-slate-700 dark:text-slate-900 dark:text-slate-500">#{p.id.slice(0, 8)}... | STK: {p.stock} | COST: UGX {p.costPrice.toLocaleString()}</span>
-                  </div>
-                  <div className="flex gap-4 items-center">
-                    <input type="number" min="0" className="terminal-input w-20 p-2 text-xs text-right border-brand-accent/30" placeholder="0"
-                      value={poQuantities[p.id] || ''}
-                      onChange={e => { const v = parseInt(e.target.value); setPoQuantities(prev => ({ ...prev, [p.id]: isNaN(v) ? 0 : v })); }}
-                    />
-                    <span className="text-[10px] font-mono text-brand-accent w-28 text-right">UGX {(p.costPrice * (poQuantities[p.id] || 0)).toLocaleString()}</span>
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  className="terminal-input w-full p-3 text-xs"
+                  value={poQuantity}
+                  onChange={e => {
+                    const nextValue = e.target.value;
+                    const parsed = parseInt(nextValue);
+                    if (!Number.isNaN(parsed) && parsed < 0) {
+                      playInvalidTone();
+                    }
+                    setPoQuantity(nextValue);
+                  }}
+                  placeholder="1"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[9px] font-display text-slate-900 dark:text-slate-500 uppercase tracking-widest">Line Total</label>
+                <div className="terminal-input w-full p-3 text-sm text-brand-accent">
+                  UGX {estimatedTotal.toLocaleString()}
                 </div>
-              ))}
-              {supplierProducts.length === 0 && <div className="text-center py-8 opacity-40 text-[10px] font-display">NO_PRODUCTS_AVAILABLE_FOR_RESTOCK</div>}
+              </div>
             </div>
           </div>
           <div className="pt-4 border-t border-brand-steel flex justify-between items-center">

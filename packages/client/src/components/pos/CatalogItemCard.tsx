@@ -36,14 +36,17 @@ const CatalogItemCard = React.memo(({ product, addToCart }: CatalogItemCardProps
           STK: {product.stock}
         </span>
       </div>
-      <div className="flex-1 overflow-hidden">
-        <h3 className="font-bold text-[10px] sm:text-xs mb-1 group-hover:text-brand-accent transition-colors line-clamp-2 uppercase leading-tight h-8 sm:h-9 overflow-hidden">
-          {product.name}
-        </h3>
+      <h3 className="mb-1 font-bold text-[9px] sm:text-[10px] group-hover:text-brand-accent transition-colors line-clamp-2 uppercase leading-snug overflow-hidden min-h-[2.25rem] sm:min-h-[2.5rem]">
+        {product.name}
+      </h3>
+      <div className="mt-auto min-h-[1.1rem] flex items-end">
+        <p className="text-brand-accent font-display font-bold text-[11px] sm:text-xs truncate group-hover:hidden">
+          {formatCurrency(product.price)}
+        </p>
+        <p className="hidden text-brand-accent font-display font-bold text-[11px] sm:text-xs truncate group-hover:block">
+          ADD TO CART
+        </p>
       </div>
-      <p className="text-brand-accent font-display font-bold text-xs sm:text-sm mt-auto truncate">
-        {formatCurrency(product.price)}
-      </p>
     </button>
   );
 });

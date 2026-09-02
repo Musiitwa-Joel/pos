@@ -46,7 +46,7 @@ export const ShiftModals = observer(({
                 <Smartphone size={window.innerWidth < 768 ? 24 : 32} />
               </div>
               <h2 className="text-lg md:text-2xl font-display text-[var(--text-main)] uppercase break-words leading-tight">
-                Register_Locked
+                Welcome to your shift
               </h2>
               <p className="text-[9px] sm:text-[10px] text-slate-900 dark:text-slate-500 font-mono mt-2 uppercase tracking-widest leading-relaxed">
                 A shift must be opened before processing sales.

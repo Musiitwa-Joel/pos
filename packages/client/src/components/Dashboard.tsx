@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 
 // ⚛️ Atomic Vanguard Components
 import { IntelligenceStats } from './Dashboard/IntelligenceStats';
-import { ProfitabilityChart } from './Dashboard/ProfitabilityChart';
 import { IntelligenceFeed } from './Dashboard/IntelligenceFeed';
 import { SecurityAuditModal } from './Dashboard/SecurityAuditModal';
 import SkeletonDashboard from './SkeletonDashboard';
@@ -118,8 +117,8 @@ export default function Dashboard() {
 
       <IntelligenceStats />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pb-6">
-        <ProfitabilityChart />
+      <div className="grid grid-cols-1 gap-6 pb-6">
+        {/* <ProfitabilityChart /> */}
         <IntelligenceFeed />
       </div>
 

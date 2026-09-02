@@ -77,17 +77,6 @@ const AddProductModal = observer(({ ui$, suppliers$, isOffline$, onSubmit }: any
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <label className="text-[9px] font-display text-orange-500 uppercase tracking-widest font-black">Margin (%)</label>
-            <ProductField observable$={ui$.formData.profitMargin} readOnly className="bg-brand-steel/5 text-orange-500 font-bold" />
-          </div>
-          <div className="space-y-1">
-            <label className="text-[9px] font-display text-brand-accent uppercase tracking-widest font-black">Calc. Price</label>
-            <ProductField observable$={ui$.formData.finalPrice} readOnly className="bg-brand-steel/5 text-brand-accent font-bold" />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-1">
             <ProductSelect
               label="Category"
               observable$={ui$.formData.category}
@@ -121,6 +110,12 @@ const AddProductModal = observer(({ ui$, suppliers$, isOffline$, onSubmit }: any
                 { value: "MTRS", label: "MTRS" },
                 { value: "KG", label: "KG" },
                 { value: "LTRS", label: "LTRS" },
+                { value: "BOXES", label: "BOXES" },
+                { value: "CARTONS", label: "CARTONS" },
+                { value: "PACKS", label: "PACKS" },
+                { value: "ROLLS", label: "ROLLS" },
+                { value: "METERS", label: "METERS" },
+                { value: "LITERS", label: "LITERS" },
               ]}
             />
           </div>
@@ -256,6 +251,12 @@ const EditProductModal = observer(({ ui$, suppliers$, isOffline$, onSubmit }: an
                 { value: "MTRS", label: "MTRS" },
                 { value: "KG", label: "KG" },
                 { value: "LTRS", label: "LTRS" },
+                { value: "BOXES", label: "BOXES" },
+                { value: "CARTONS", label: "CARTONS" },
+                { value: "PACKS", label: "PACKS" },
+                { value: "ROLLS", label: "ROLLS" },
+                { value: "METERS", label: "METERS" },
+                { value: "LITERS", label: "LITERS" },
               ]}
             />
           </div>

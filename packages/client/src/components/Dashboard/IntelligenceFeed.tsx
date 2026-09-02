@@ -17,7 +17,7 @@ export const IntelligenceFeed = observer(() => {
   const combinedLogs = combinedLogs$.get();
 
   return (
-    <div className="industrial-panel flex flex-col min-h-[400px]">
+    <div className="industrial-panel flex flex-col min-h-[70vh] w-full">
       <div className="industrial-panel-header bg-[var(--panel-bg)]/40 flex justify-between items-center px-4 py-3">
         <div className="flex items-center gap-2">
           <ClipboardList size={14} className="text-brand-accent" />

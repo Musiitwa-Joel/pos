@@ -1,11 +1,9 @@
 import React from 'react';
-import { Search, Clock } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { observer, useObservable } from '@legendapp/state/react';
-import { cn, formatCurrency } from '../../lib/utils';
 import { Product } from '../../types';
 import { toast } from 'sonner';
 import CatalogItemCard from './CatalogItemCard';
-import { useHardware } from '../../HardwareContext';
 
 interface POSCatalogProps {
   addToCart: (product: Product) => void;
@@ -22,9 +20,35 @@ export const POSCatalog = observer(({
   products,
   ui$
 }: POSCatalogProps) => {
-  const { heldSales, refreshHeldSales } = useHardware();
-  const heldSalesCount = heldSales.length;
   const local$ = useObservable({ searchQuery: "" });
+  const audioContextRef = React.useRef<AudioContext | null>(null);
+
+  const playClickSound = React.useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    if (!audioContextRef.current) {
+      audioContextRef.current = new AudioCtx();
+    }
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') {
+      void ctx.resume();
+    }
+
+    const oscillator = ctx.createOscillator();
+    const gain = ctx.createGain();
+    oscillator.type = 'triangle';
+    oscillator.frequency.value = 840;
+    gain.gain.value = 0.02;
+    oscillator.connect(gain);
+    gain.connect(ctx.destination);
+    oscillator.start();
+    oscillator.stop(ctx.currentTime + 0.08);
+    oscillator.onended = () => {
+      oscillator.disconnect();
+      gain.disconnect();
+    };
+  }, []);
 
   const filteredProducts = React.useMemo(() => products.filter(
     (p) =>
@@ -48,49 +72,28 @@ export const POSCatalog = observer(({
 
   return (
     <div className="industrial-panel flex-1 flex flex-col min-h-0 bg-[var(--bg-panel)]">
-      <div className="industrial-panel-header min-w-0 px-4 py-3">
-        <div className="flex items-center gap-2 shrink-0 min-w-0 overflow-hidden">
-          <Search size={14} className="text-brand-accent shrink-0" />
-          <span className="text-[0.625rem] font-display uppercase tracking-widest truncate">
-            Product_Catalog
-          </span>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {heldSalesCount > 0 && (
-            <button
-              onClick={() => {
-                refreshHeldSales(false);
-                ui$.showHeldSales.set(true);
-              }}
-              className="flex items-center gap-1.5 px-2 py-1 bg-brand-accent/20 border border-brand-accent/40 text-brand-accent hover:bg-brand-accent hover:text-white transition-all rounded text-[8px] font-display uppercase animate-pulse shrink-0"
-            >
-              <Clock size={10} className="shrink-0" />
-              <span className="truncate">
-                <span className="hidden sm:inline">PARKED_SALES: </span>
-                <span className="sm:hidden">PARKED: </span>
-                {heldSalesCount}
-              </span>
-            </button>
-          )}
-          <span className="keyboard-hint shrink-0 whitespace-nowrap text-[8px] opacity-90 dark:opacity-60 hidden sm:inline-block">
-            ^ K TO FOCUS
-          </span>
-        </div>
-      </div>
-
-      <div className="p-2 border-b border-brand-steel bg-black/5">
+      <div className="catalog-search-shell p-2 border-b border-brand-steel bg-black/5">
         <input
           ref={searchInputRef}
           type="text"
           placeholder="SCAN OR TYPE PRODUCT NAME..."
-          className="terminal-input w-full h-9 sm:h-10 text-sm"
+          className="terminal-input catalog-search-input w-full h-11 sm:h-12 text-sm"
           value={local$.searchQuery.get()}
           onChange={(e: any) => local$.searchQuery.set(e.target.value)}
           onKeyDown={handleKeyDown}
         />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 pb-32 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 content-start custom-scrollbar min-h-0">
+      <div
+        className="flex-1 overflow-y-auto p-2 pb-32 grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 content-start custom-scrollbar min-h-0"
+        onClickCapture={(e) => {
+          const target = e.target as HTMLElement | null;
+          if (!target) return;
+          const button = target.closest('button');
+          if (!button) return;
+          playClickSound();
+        }}
+      >
         {filteredProducts.slice(0, 100).map((product) => (
           <CatalogItemCard
             key={product.id}

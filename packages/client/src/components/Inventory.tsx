@@ -44,8 +44,6 @@ export default function Inventory() {
       barcode: "",
       costPrice: "",
       sellingPrice: "",
-      profitMargin: "0",
-      finalPrice: "0",
       initialStock: "",
       unit: "PCS",
       minStock: "5",
@@ -67,23 +65,6 @@ export default function Inventory() {
       minStock: "5",
     }
   });
-
-  // 🛰️ [INTELLIGENCE] Computed Financial Horizon
-  // High-performance reactive math for industrial margins.
-  useEffect(() => {
-    ui$.formData.profitMargin.set(() => {
-      const cost = parseFloat(ui$.formData.costPrice.get() || "0");
-      const sales = parseFloat(ui$.formData.sellingPrice.get() || "0");
-      if (!isNaN(cost) && !isNaN(sales) && cost > 0) {
-        return ((sales - cost) / cost * 100).toFixed(1);
-      }
-      return "0";
-    });
-
-    ui$.formData.finalPrice.set(() => {
-      return ui$.formData.sellingPrice.get() || "0";
-    });
-  }, [ui$]);
 
   // 🛰️ [INTELLIGENCE] Edit Sync Protocol
   // Auto-hydrates the edit form when a product is selected.
@@ -120,7 +101,7 @@ export default function Inventory() {
         supplierId: data.supplierId || undefined,
         barcode: data.barcode || undefined,
         costPrice: parseFloat(data.costPrice),
-        price: parseFloat(ui$.formData.finalPrice.get() || data.sellingPrice),
+        price: parseFloat(data.sellingPrice),
         initialStock: 0,
         unit: data.unit,
         minStock: parseInt(data.minStock) || 5,
@@ -140,8 +121,6 @@ export default function Inventory() {
         barcode: "",
         costPrice: "",
         sellingPrice: "",
-        profitMargin: "0",
-        finalPrice: "0",
         initialStock: "",
         unit: "PCS",
         minStock: "5",

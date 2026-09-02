@@ -879,6 +879,9 @@
   .h-10 {
     height: calc(var(--spacing) * 10);
   }
+  .h-11 {
+    height: calc(var(--spacing) * 11);
+  }
   .h-12 {
     height: calc(var(--spacing) * 12);
   }
@@ -996,8 +999,17 @@
   .min-h-8 {
     min-height: calc(var(--spacing) * 8);
   }
+  .min-h-\[1\.1rem\] {
+    min-height: 1.1rem;
+  }
+  .min-h-\[2\.25rem\] {
+    min-height: 2.25rem;
+  }
   .min-h-\[60px\] {
     min-height: 60px;
+  }
+  .min-h-\[70vh\] {
+    min-height: 70vh;
   }
   .min-h-\[80px\] {
     min-height: 80px;
@@ -1548,6 +1560,9 @@
   .list-none {
     list-style-type: none;
   }
+  .appearance-auto {
+    appearance: auto;
+  }
   .appearance-none {
     appearance: none;
   }
@@ -1646,6 +1661,13 @@
   }
   .gap-\[2px\] {
     gap: 2px;
+  }
+  .space-y-0\.5 {
+    :where(& > :not(:last-child)) {
+      --tw-space-y-reverse: 0;
+      margin-block-start: calc(calc(var(--spacing) * 0.5) * var(--tw-space-y-reverse));
+      margin-block-end: calc(calc(var(--spacing) * 0.5) * calc(1 - var(--tw-space-y-reverse)));
+    }
   }
   .space-y-1 {
     :where(& > :not(:last-child)) {
@@ -2512,12 +2534,6 @@
     background-color: var(--bg-main);
     @supports (color: color-mix(in lab, red, red)) {
       background-color: color-mix(in oklab, var(--bg-main) 50%, transparent);
-    }
-  }
-  .bg-\[var\(--bg-main\)\]\/60 {
-    background-color: var(--bg-main);
-    @supports (color: color-mix(in lab, red, red)) {
-      background-color: color-mix(in oklab, var(--bg-main) 60%, transparent);
     }
   }
   .bg-\[var\(--bg-panel\)\] {
@@ -3724,6 +3740,10 @@
     --tw-tracking: 0.15em;
     letter-spacing: 0.15em;
   }
+  .tracking-\[0\.18em\] {
+    --tw-tracking: 0.18em;
+    letter-spacing: 0.18em;
+  }
   .tracking-\[0\.25em\] {
     --tw-tracking: 0.25em;
     letter-spacing: 0.25em;
@@ -4797,6 +4817,20 @@
   .group-focus-within\:text-brand-accent {
     &:is(:where(.group):focus-within *) {
       color: var(--color-brand-accent);
+    }
+  }
+  .group-hover\:block {
+    &:is(:where(.group):hover *) {
+      @media (hover: hover) {
+        display: block;
+      }
+    }
+  }
+  .group-hover\:hidden {
+    &:is(:where(.group):hover *) {
+      @media (hover: hover) {
+        display: none;
+      }
     }
   }
   .group-hover\:-translate-x-1 {
@@ -6090,16 +6124,6 @@
       }
     }
   }
-  .hover\:bg-warning\/10 {
-    &:hover {
-      @media (hover: hover) {
-        background-color: color-mix(in srgb, #d97706 10%, transparent);
-        @supports (color: color-mix(in lab, red, red)) {
-          background-color: color-mix(in oklab, var(--color-warning) 10%, transparent);
-        }
-      }
-    }
-  }
   .hover\:bg-warning\/15 {
     &:hover {
       @media (hover: hover) {
@@ -6586,11 +6610,6 @@
       display: inline;
     }
   }
-  .sm\:inline-block {
-    @media (width >= 40rem) {
-      display: inline-block;
-    }
-  }
   .sm\:inline-flex {
     @media (width >= 40rem) {
       display: inline-flex;
@@ -6628,11 +6647,6 @@
   .sm\:h-8 {
     @media (width >= 40rem) {
       height: calc(var(--spacing) * 8);
-    }
-  }
-  .sm\:h-9 {
-    @media (width >= 40rem) {
-      height: calc(var(--spacing) * 9);
     }
   }
   .sm\:h-10 {
@@ -6683,6 +6697,11 @@
   .sm\:max-h-\[60vh\] {
     @media (width >= 40rem) {
       max-height: 60vh;
+    }
+  }
+  .sm\:min-h-\[2\.5rem\] {
+    @media (width >= 40rem) {
+      min-height: 2.5rem;
     }
   }
   .sm\:w-8 {
@@ -8560,6 +8579,44 @@
       border-color: var(--color-brand-accent);
     }
   }
+  .catalog-search-shell {
+    position: relative;
+    overflow: hidden;
+  }
+  .catalog-search-shell::before, .catalog-card::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    padding: 1px;
+    background: linear-gradient(120deg, transparent 0%, rgba(249, 115, 22, 0.18) 20%, rgba(59, 130, 246, 0.35) 50%, rgba(249, 115, 22, 0.18) 80%, transparent 100%);
+    background-size: 200% 200%;
+    animation: border-sweep 4.5s linear infinite;
+    pointer-events: none;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0.55;
+  }
+  .catalog-search-shell:focus-within::before, .catalog-card:hover::before, .catalog-card:focus-visible::before {
+    opacity: 1;
+  }
+  .catalog-card {
+    position: relative;
+    overflow: hidden;
+  }
+  .catalog-card::before {
+    opacity: 0.25;
+  }
+  .catalog-card:hover, .catalog-card:focus-visible {
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.35), 0 10px 30px rgba(0, 0, 0, 0.25);
+  }
+  .catalog-search-input {
+    position: relative;
+    z-index: 1;
+    letter-spacing: 0.08em;
+  }
   .btn-industrial {
     border-radius: 0;
     border-style: var(--tw-border-style);
@@ -8791,6 +8848,14 @@
   50% {
     opacity: 1;
     filter: blur(12px);
+  }
+}
+@keyframes border-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 200% 50%;
   }
 }
 .glow-accent {

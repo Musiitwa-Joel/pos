@@ -10,9 +10,7 @@ import {
   Globe,
   Receipt,
   Truck,
-  DollarSign,
   RotateCcw,
-  Zap,
   UserCog,
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
@@ -33,7 +31,6 @@ const Inventory = React.lazy(() => import("./components/Inventory"));
 const CreditManagement = React.lazy(() => import("./components/CreditManagement"));
 const SalesLogs = React.lazy(() => import("./components/SalesLogs"));
 const Suppliers = React.lazy(() => import("./components/Suppliers"));
-const Expenses = React.lazy(() => import("./components/Expenses"));
 const HRModule = React.lazy(() => import("./components/HRModule"));
 const SettingsView = React.lazy(() => import("./components/SettingsView"));
 const Reports = React.lazy(() => import("./components/Reports"));
@@ -42,7 +39,6 @@ const ReturnsManagement = React.lazy(() => import("./components/ReturnsManagemen
 // 👑 HQ Modules (Deferred)
 const BillingHub = React.lazy(() => import("./components/hq/BillingHub"));
 const InstitutionRegistry = React.lazy(() => import("./components/hq/InstitutionRegistry"));
-const WebsiteManager = React.lazy(() => import("./components/hq/WebsiteManager"));
 const GlobalReports = React.lazy(() => import("./components/hq/GlobalReports"));
 const SystemAudit = React.lazy(() => import("./components/hq/SystemAudit"));
 const InfrastructureHub = React.lazy(() => import("./components/hq/InfrastructureHub"));
@@ -63,7 +59,6 @@ type View =
   | "returns"
   | "billing"
   | "institutions"
-  | "website"
   | "global_reports"
   | "audit"
   | "institutional_reports";
@@ -143,7 +138,7 @@ export default observer(function AppShell() {
       ? [
         { id: "billing", label: "Collections HQ", icon: LayoutGrid, shortcut: "C" },
         { id: "institutions", label: "B2B Registry", icon: Globe, shortcut: "I" },
-        { id: "website", label: "Manage Website", icon: Zap, shortcut: "W" },
+        // { id: "website", label: "Manage Website", icon: Zap, shortcut: "W" },
         { id: "global_reports", label: "Global Reports", icon: BarChart3, shortcut: "R" },
         { id: "audit", label: "Security Logs", icon: Receipt, shortcut: "A" },
         { id: "settings", label: "Global Config", icon: SettingsIcon, shortcut: "G" },
@@ -157,7 +152,7 @@ export default observer(function AppShell() {
         { id: "sales", label: "Audit", icon: Receipt, shortcut: "L" },
         { id: "reports", label: "Analytics", icon: BarChart3, shortcut: "B" },
         { id: "suppliers", label: "Suppliers", icon: Truck, shortcut: "S" },
-        { id: "expenses", label: "Expenses", icon: DollarSign, shortcut: "E" },
+        // { id: "expenses", label: "Expenses", icon: DollarSign, shortcut: "E" },
         { id: "returns", label: "Returns Hub", icon: RotateCcw, shortcut: "T" },
       ];
   }, [isHqCeo]);
@@ -283,7 +278,7 @@ export default observer(function AppShell() {
                 {currentView === "credit" && <CreditManagement />}
                 {currentView === "sales" && <SalesLogs />}
                 {currentView === "suppliers" && <Suppliers />}
-                {currentView === "expenses" && <div className="hidden lg:block h-full"><Expenses /></div>}
+                {/* {currentView === "expenses" && <div className="hidden lg:block h-full"><Expenses /></div>} */}
                 {currentView === "reports" && <Reports />}
                 {currentView === "returns" && <ReturnsManagement />}
                 {currentView === "hr" && <HRModule />}
@@ -291,7 +286,7 @@ export default observer(function AppShell() {
                 {/* HQ Views */}
                 {currentView === "billing" && <BillingHub />}
                 {currentView === "institutions" && <InstitutionRegistry />}
-                {currentView === "website" && <WebsiteManager />}
+                {/* {currentView === "website" && <WebsiteManager />} */}
                 {currentView === "global_reports" && <GlobalReports />}
                 {currentView === "audit" && <SystemAudit />}
 
